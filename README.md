@@ -19,7 +19,9 @@ Version Control
 
 |Version       |Description                                    |
 |--------------|-----------------------------------------------|
-|0.1           |Basic Wireframe Drawing                        |
+|0.11          |Basic Wireframe Drawing                        |
 |              |Zoom, Translate, Rotate                        |
 |0.2 (todo)    |View Planes                                    |
 |              |Perspective & parallel projection              |
+|0.3 (todo)    |Backplane culling                              |
+|              |Class refactoring of vertices & faces          |
