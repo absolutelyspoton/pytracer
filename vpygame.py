@@ -1,8 +1,11 @@
-import sys
+# Author: Dominic Williams
+# Date created: 10 Aug 2022
+# 
+# Simple Wireframe Viewing System
+
 import pygame
 import loader 
 import matrix 
-
 
 def start(vertices,faces):
 
@@ -15,9 +18,9 @@ def start(vertices,faces):
     center_z = 0
     center_shift = 10
 
-    scalar_x = -100
-    scalar_y = -100
-    scalar_z = -100
+    x_scalar = -100
+    y_scalar = -100
+    z_scalar = -100
     scale_shift = 1.1
 
     x_rotation = 0
@@ -30,8 +33,6 @@ def start(vertices,faces):
 
     screen = pygame.display.set_mode(size)
     screen.fill(white)
-
-    I = matrix.IdentityMatrix()
 
     while 1:
         for event in pygame.event.get():
@@ -50,17 +51,17 @@ def start(vertices,faces):
 
 
                 if event.key == pygame.K_MINUS:
-                    scalar_x = scalar_x / scale_shift
-                    scalar_y = scalar_y / scale_shift
-                    scalar_z = scalar_z / scale_shift
+                    x_scalar = x_scalar / scale_shift
+                    y_scalar = y_scalar / scale_shift
+                    z_scalar = z_scalar / scale_shift
 
                     screen.fill(white)
 
                 if event.key == pygame.K_EQUALS:
 
-                    scalar_x = scalar_x * scale_shift
-                    scalar_y = scalar_y * scale_shift
-                    scalar_z = scalar_z * scale_shift
+                    x_scalar = x_scalar * scale_shift
+                    y_scalar = y_scalar * scale_shift
+                    z_scalar = z_scalar * scale_shift
                     
                     screen.fill(white)
 
@@ -104,17 +105,17 @@ def start(vertices,faces):
                     center_x += center_shift
                     screen.fill(white)  
         
-        # todo : translate
-        I = matrix.MatrixMult(matrix.RotateMatrix(x_rotation,y_rotation,z_rotation), matrix.ScaleMatrix(scalar_x,scalar_y,scalar_z))
+        # todo : add the translate
+        I = matrix.MatrixMult(matrix.RotateMatrix(x_rotation,y_rotation,z_rotation), matrix.ScaleMatrix(x_scalar,y_scalar,z_scalar))
         
         print(center_x,center_y,center_z)
         matrix.PrintMatrix(I)
 
-        for face in surfaces.surface_list:
+        for surface in surfaces.surface_list:
             
-            vertex_index_1 = int(face[0])
-            vertex_index_2 = int(face[1])
-            vertex_index_3 = int(face[2])
+            vertex_index_1 = int(surface[0])
+            vertex_index_2 = int(surface[1])
+            vertex_index_3 = int(surface[2])
 
             x1w = float(vertices.vertex_list[vertex_index_1-1].x) 
             y1w = float(vertices.vertex_list[vertex_index_1-1].y)  

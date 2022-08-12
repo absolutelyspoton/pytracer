@@ -1,3 +1,8 @@
+# Author: Dominic Williams
+# Date created: 10 Aug 2022
+# 
+# Helpers to load vertices and surfaces from file
+
 import csv
 import surface
 import vertex

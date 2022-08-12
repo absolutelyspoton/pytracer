@@ -1,3 +1,10 @@
+# Author: Dominic Williams
+# Date created: 10 Aug 2022
+# 
+# Matrix Maths Module
+
+
+
 import math
 
 VECTOR_SIZE = 4

@@ -1,3 +1,9 @@
+# Author: Dominic Williams
+# Date created: 10 Aug 2022
+# 
+# Classes for modelling vertices
+
+
 class vertex:
 
     def normal():
