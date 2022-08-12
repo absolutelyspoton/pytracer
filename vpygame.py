@@ -1,8 +1,8 @@
 import sys
 import pygame
-import csv
-import math
+import loader 
 import matrix 
+
 
 def start(vertices,faces):
 
@@ -104,33 +104,29 @@ def start(vertices,faces):
                     center_x += center_shift
                     screen.fill(white)  
         
-
-        # I = matrix.IdentityMatrix()
-        # I = matrix.MatrixMult(I, matrix.ScaleMatrix(scalar_x,scalar_y,scalar_z))
-
-
+        # todo : translate
         I = matrix.MatrixMult(matrix.RotateMatrix(x_rotation,y_rotation,z_rotation), matrix.ScaleMatrix(scalar_x,scalar_y,scalar_z))
         
-        # I = matrix.MatrixMult(I, matrix.TranslateMatrix(center_x,center_y,center_z))
-
         print(center_x,center_y,center_z)
         matrix.PrintMatrix(I)
 
-        for f in faces:
+        for face in surfaces.surface_list:
             
-            v1,v2,v3 = int(f[0]),int(f[1]),int(f[2])
+            vertex_index_1 = int(face[0])
+            vertex_index_2 = int(face[1])
+            vertex_index_3 = int(face[2])
 
-            x1w = float(vertices[v1-1][0]) 
-            y1w = float(vertices[v1-1][1])  
-            z1w = float(vertices[v1-1][2]) 
+            x1w = float(vertices.vertex_list[vertex_index_1-1].x) 
+            y1w = float(vertices.vertex_list[vertex_index_1-1].y)  
+            z1w = float(vertices.vertex_list[vertex_index_1-1].z) 
 
-            x2w = float(vertices[v2-1][0]) 
-            y2w = float(vertices[v2-1][1]) 
-            z2w = float(vertices[v2-1][2]) 
+            x2w = float(vertices.vertex_list[vertex_index_2-1].x) 
+            y2w = float(vertices.vertex_list[vertex_index_2-1].y) 
+            z2w = float(vertices.vertex_list[vertex_index_2-1].z) 
 
-            x3w = float(vertices[v3-1][0]) 
-            y3w = float(vertices[v3-1][1]) 
-            z3w = float(vertices[v3-1][2])   
+            x3w = float(vertices.vertex_list[vertex_index_3-1].x) 
+            y3w = float(vertices.vertex_list[vertex_index_3-1].y) 
+            z3w = float(vertices.vertex_list[vertex_index_3-1].z)   
 
             t = matrix.MatrixVector(I,[x1w,y1w,z1w])
             x1w = t[0] 
@@ -156,18 +152,12 @@ def start(vertices,faces):
 
         pygame.display.flip()
 
-def load_data(fn):
-    data = []
-    with open(fn) as csv_file:
-        csv_reader = csv.reader(csv_file,delimiter=',')
-        for row in csv_reader:
-            data.append(row)
-    return(data[1:])
+
+
 
 if __name__ == '__main__':
-    vertices = load_data('utah_teapot_vertices.csv')
-    faces = load_data('utah_teapot_faces.csv')
-    start(vertices,faces)
-
+    vertices = loader.load_vertices()
+    surfaces = loader.load_surfaces()
+    start(vertices,surfaces)
 else :
     print(__name__)
