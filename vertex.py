@@ -9,7 +9,7 @@ class vertex:
     def normal(self,normal):
         self.normal = normal
 
-    def __init__(self,x,y,z):
+    def __init__(self,x=0,y=0,z=0):
         self.x = x
         self.y = y
         self.z = z
@@ -42,6 +42,7 @@ if __name__ == '__main__':
 
     print(vl.vertex_count())
     print(vl.vertex_list[0].x)
+
 
 else :
     print(__name__)

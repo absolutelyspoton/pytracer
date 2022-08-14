@@ -22,6 +22,13 @@ Version Control
 |0.11          |Basic Wireframe Drawing - Zoom, Translate, Rotate                        |
 |0.2           |Object Classes                                                           |
 |0.3           |Normals for surfaces                                                     |
-|0.4(todo)     |Test cases, and test harness (pytest)                                    |
+|0.4           |Test cases, and test harness (pytest)                                    |
 |0.5 (todo)    |View Planes - Perspective & parallel projection                          |
 |0.6 (todo)    |Backplane culling & Normals for vertices                                 |
+
+Testing
+
+To run tests use the command from project root directory 
+```
+python3 -m pytest -v
+```

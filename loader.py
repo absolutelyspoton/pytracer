@@ -8,7 +8,7 @@ import surface
 import vertex
 
 def load_vertices():
-    fn = 'utah_teapot_vertices.csv'
+    fn = './objects/utah_teapot_vertices.csv'
     vertices = vertex.vertices()
     with open(fn) as csv_file:
         csv_reader = csv.reader(csv_file,delimiter=',')
@@ -22,7 +22,7 @@ def load_vertices():
 
 def load_surfaces():
     surfaces = surface.surface()
-    fn = 'utah_teapot_faces.csv'
+    fn = './objects/utah_teapot_faces.csv'
     with open(fn) as csv_file:
         csv_reader = csv.reader(csv_file,delimiter=',')
         line_count = 0
