@@ -17,15 +17,11 @@ GUI Commands
 
 Version Control
 
-|Version       |Description                                    |
-|--------------|-----------------------------------------------|
-|0.11          |Basic Wireframe Drawing                        |
-|              |Zoom, Translate, Rotate                        |
-|0.2           |Object Classes                                 |
-|              |Surfaces, Vectors                              |
-|0.3 (todo)    |Normals                                        |
-|              |Surfaces, Vectors                              |
-|0.4 (todo)    |View Planes                                    |
-|              |Perspective & parallel projection              |
-|0.5 (todo)    |Backplane culling                              |
-|              |                                               |
+|Version       |Description                                                              |
+|--------------|------------------------------------------------------------------------ |
+|0.11          |Basic Wireframe Drawing - Zoom, Translate, Rotate                        |
+|0.2           |Object Classes                                                           |
+|0.3           |Normals for surfaces                                                     |
+|0.4(todo)     |Test cases, and test harness (pytest)                                    |
+|0.5 (todo)    |View Planes - Perspective & parallel projection                          |
+|0.6 (todo)    |Backplane culling & Normals for vertices                                 |

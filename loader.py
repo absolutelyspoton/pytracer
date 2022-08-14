@@ -28,7 +28,10 @@ def load_surfaces():
         line_count = 0
         for row in csv_reader:
             if line_count > 0: 
-                surfaces.add_face(row)
+                face = surface.face()
+                face.add_face_index(row)
+                #surfaces.add_face(row)
+                surfaces.add_face(face)
             line_count += 1
     return(surfaces)
 

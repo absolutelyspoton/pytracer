@@ -26,7 +26,7 @@ def start(vertices,faces):
     x_rotation = 0
     y_rotation = 0
     z_rotation = 0
-    rotation_shift = 10
+    rotation_shift = 1
    
     black = 0, 0, 0
     white = 255,255,255
@@ -42,7 +42,7 @@ def start(vertices,faces):
 
                 if event.key == pygame.K_c:
                     center_x = width / 2
-                    center_y = height / 4
+                    center_y = height / 2
                     center_z = 100
                     x_rotation = 0
                     y_rotation = 0
@@ -113,21 +113,34 @@ def start(vertices,faces):
 
         for surface in surfaces.surface_list:
             
-            vertex_index_1 = int(surface[0])
-            vertex_index_2 = int(surface[1])
-            vertex_index_3 = int(surface[2])
+            # Get index to each vertex in the surface ( 3 in this case as polgon is a triangle )
+            vertex_index_1 = int(surface.vertex_list[0])
+            vertex_index_2 = int(surface.vertex_list[1])
+            vertex_index_3 = int(surface.vertex_list[2])
 
+            # Using the index to the vertex extract the x,y,z world coordinate 
+            # one
             x1w = float(vertices.vertex_list[vertex_index_1-1].x) 
             y1w = float(vertices.vertex_list[vertex_index_1-1].y)  
             z1w = float(vertices.vertex_list[vertex_index_1-1].z) 
+            v1w = [x1w,y1w,z1w]
 
+            # two
             x2w = float(vertices.vertex_list[vertex_index_2-1].x) 
             y2w = float(vertices.vertex_list[vertex_index_2-1].y) 
             z2w = float(vertices.vertex_list[vertex_index_2-1].z) 
+            v2w = [x2w,y2w,z2w]
 
+            # three
             x3w = float(vertices.vertex_list[vertex_index_3-1].x) 
             y3w = float(vertices.vertex_list[vertex_index_3-1].y) 
-            z3w = float(vertices.vertex_list[vertex_index_3-1].z)   
+            z3w = float(vertices.vertex_list[vertex_index_3-1].z)
+            v3w = [x3w,y3w,z3w]
+
+            # Calculate surface normals ( call method of surface class )
+            # Using two collinear vertices, calculate normal between the two vectors
+            # Needed for deciding whether to cull the rendering of the surface
+            surface.calcNormal(v1w,v2w,v3w)
 
             t = matrix.MatrixVector(I,[x1w,y1w,z1w])
             x1w = t[0] 
@@ -147,14 +160,9 @@ def start(vertices,faces):
             # view plane transformation
             p = [(x1w+center_x,y1w+center_y),(x2w+center_x,y2w+center_y),(x3w+center_x,y3w+center_y)]
 
-
             pygame.draw.polygon(screen,black,p,1)
 
-
         pygame.display.flip()
-
-
-
 
 if __name__ == '__main__':
     vertices = loader.load_vertices()

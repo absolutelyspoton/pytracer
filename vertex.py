@@ -6,8 +6,8 @@
 
 class vertex:
 
-    def normal():
-        return 0
+    def normal(self,normal):
+        self.normal = normal
 
     def __init__(self,x,y,z):
         self.x = x
