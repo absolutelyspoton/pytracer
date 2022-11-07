@@ -15,7 +15,7 @@ class face:
 
     # return the number of vertex indices for this face
     def face_index_count(self):
-        return(len(self.index_list))
+        return(len(self.vertex_list))
 
     def calcNormal(self,v1,v2,v3):
             
