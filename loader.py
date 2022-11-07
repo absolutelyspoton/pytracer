@@ -15,7 +15,7 @@ def load_vertices():
         line_count = 0
         for row in csv_reader:
             if line_count > 0:
-                v = vertex.vertex(row[0],row[1],row[2])
+                v = vertex.vertex(x=float(row[0]),y=float(row[1]),z=float(row[2]))
                 vertices.add_vertex(v)
             line_count += 1
     return(vertices)    
@@ -37,7 +37,11 @@ def load_surfaces():
 
 if __name__ == '__main__':
     vertices = load_vertices()
+    print("No vertices: " + str(vertices.vertex_count()))
+    
     surfaces = load_surfaces()
-    print(__file__)
+    print("No surfaces: " + str(surfaces.surface_count()))
+
 else :
+    print(__file__)
     print(__name__)
