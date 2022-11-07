@@ -6,6 +6,8 @@
 import pygame
 import loader 
 import matrix 
+import sys
+from devtools import debug
 
 def start(vertices,faces):
 
