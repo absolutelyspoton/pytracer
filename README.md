@@ -26,9 +26,3 @@ Version Control
 |0.5 (todo)    |View Planes - Perspective & parallel projection                          |
 |0.6 (todo)    |Backplane culling & Normals for vertices                                 |
 
-Testing
-
-To run tests use the command from project root directory 
-```
-python3 -m pytest -v
-```
