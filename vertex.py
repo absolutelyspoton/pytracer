@@ -36,8 +36,7 @@ if __name__ == '__main__':
 
     debug(vl.vertex_count())
     debug(vl.vertex_list[0].x)
-
-
+    
 else :
     debug(__file__)
     debug(__name__)
