@@ -5,6 +5,8 @@ import time
 import requests
 from typing import List
 
+from bson.json_util import dumps, loads
+
 app = FastAPI()
 
 DEV_MONGODB_ADDRESS = 'mongodb://localhost:27017/'
@@ -41,21 +43,29 @@ async def get_data(database:str,table:str,id:int):
     else:
         filter = {'id':id}
 
-    result = client[database][table].find(filter=filter)
+    projection = {'id':0,'_id':0}
+    result = client[database][table].find(filter=filter,projection=projection)
 
-    r:List = []
-    for n in result:
-        r.append(n)
+    d = dumps(result)
+    l = loads(d)
 
-    print('Rows in collection:',len(r))
-    return str(r)
+    print('Rows in collection:',len(l))
+    return (l)
 
 if __name__ == '__main__':
     client = MongoClient('mongodb://localhost:27017/')
-    filter = {}
-    result = client['3dobject']['objects'].find(filter=filter)
-    print(result)
-    r = []
-    for n in result:
-        r.append(n)
-        print(r)
+    filter = {'id':1}
+    # projection = {}
+    projection = {'id':0,'_id':0}
+    result = client['3dobject']['vertices'].find(filter=filter,projection=projection)
+
+    j = dumps(result)
+    print(j)
+
+    p = loads(j)
+    print(p)
+
+    for i in p:
+        print(i)
+
+    pass
