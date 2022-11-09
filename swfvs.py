@@ -36,9 +36,20 @@ def start(vertices,faces):
     screen = pygame.display.set_mode(size)
     screen.fill(white)
 
+    rotation = False
+
     while 1:
+
+        if rotation:
+            y_rotation +=1
+            x_rotation +=1
+            z_rotation +=1
+            screen.fill(white)
+
         for event in pygame.event.get():
-            if event.type == pygame.QUIT: sys.exit()
+
+            if event.type == pygame.QUIT: 
+                sys.exit()
                         
             if event.type == pygame.KEYDOWN:
 
@@ -50,7 +61,6 @@ def start(vertices,faces):
                     y_rotation = 0
                     z_rotation = 0
                     screen.fill(white)
-
 
                 if event.key == pygame.K_MINUS:
                     x_scalar = x_scalar / scale_shift
@@ -102,16 +112,21 @@ def start(vertices,faces):
                 if event.key == pygame.K_LEFT:
                     center_x -= center_shift
                     screen.fill(white)  
-                
+
                 if event.key == pygame.K_RIGHT:
                     center_x += center_shift
                     screen.fill(white)  
-        
+
+                if event.key == pygame.K_SPACE:
+                    if rotation:
+                        rotation = False
+                    else:
+                        rotation = True
+
+                    
         # todo : add the translate
         I = matrix.MatrixMult(matrix.RotateMatrix(x_rotation,y_rotation,z_rotation), matrix.ScaleMatrix(x_scalar,y_scalar,z_scalar))
         
-        # matrix.PrintMatrix(I)
-
         for surface in surfaces.surface_list:
             
             # Get index to each vertex in the surface ( 3 in this case as polgon is a triangle )

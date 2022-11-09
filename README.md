@@ -1,5 +1,5 @@
 # pytracer
-Attempt to build a ray tracing app abstracting various graphics libraries - mvc
+Attempt to build a ray tracing app abstracting various graphics libraries
 
 Graphics Packages Integrated
 - pygame
@@ -14,6 +14,7 @@ GUI Commands
 |Q/W           |Rotate X-Axis                                  |
 |A/S           |Rotate Y-Axis                                  |
 |Z/X           |Rotate Z-Axis                                  |
+|SPACE         |Toggle spin around x,y,z axis                  |
 
 Version Control
 
