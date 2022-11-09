@@ -7,8 +7,7 @@ from pydantic import BaseModel
 from typing import List
 from devtools import debug
 
-class face:
-
+class face(BaseModel):
     vertex_list: List = []
     normal: List = []
 
@@ -34,8 +33,7 @@ class face:
         # Store it
         self.normal = [x,y,z]
 
-class surface:
-
+class surface(BaseModel):
     surface_list: List = []
 
     def add_face(self,f:face):
