@@ -15,7 +15,7 @@ class vertex(BaseModel):
     def normal(self,normal):
         self.normal = normal
 
-class vertices:
+class vertices(BaseModel):
     vertex_list: List = []
 
     def add_vertex(self,v:vertex):
@@ -33,11 +33,5 @@ if __name__ == '__main__':
 
     vl.add_vertex(v1)
     vl.add_vertex(v2)
-
-    debug(vl.vertex_count())
-    debug(vl.vertex_list[0].x)
     
-else :
-    debug(__file__)
-    debug(__name__)
         
