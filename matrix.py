@@ -50,24 +50,24 @@ def RotateMatrix(x_theta,y_theta,z_theta):
 
     # Rotation through z-axis
     arr_z = IdentityMatrix()
-    arr_z[0][0] = math.cos(z_rad)
-    arr_z[1][0] = math.sin(z_rad) * -1
-    arr_z[0][1] = math.sin(z_rad)
-    arr_z[1][1] = math.cos(z_rad)
+    arr_z[0][0] = math.cos(z_rad)  # type: ignore
+    arr_z[1][0] = math.sin(z_rad) * -1 # type: ignore
+    arr_z[0][1] = math.sin(z_rad) # type: ignore
+    arr_z[1][1] = math.cos(z_rad) # type: ignore
 
     # Rotation through y-axis
     arr_y = IdentityMatrix()
-    arr_y[0][0] = math.cos(y_rad)
-    arr_y[2][0] = math.sin(y_rad) 
-    arr_y[0][2] = math.sin(y_rad) * -1
-    arr_y[2][2] = math.cos(y_rad)
+    arr_y[0][0] = math.cos(y_rad) # type: ignore
+    arr_y[2][0] = math.sin(y_rad) # type: ignore
+    arr_y[0][2] = math.sin(y_rad) * -1 # type: ignore
+    arr_y[2][2] = math.cos(y_rad) # type: ignore
 
     # Rotation through x-axis
     arr_x = IdentityMatrix()
-    arr_x[1][1] = math.cos(x_rad)
-    arr_x[2][1] = math.sin(x_rad) * -1
-    arr_x[1][2] = math.sin(x_rad) 
-    arr_x[2][2] = math.cos(x_rad)
+    arr_x[1][1] = math.cos(x_rad) # type: ignore
+    arr_x[2][1] = math.sin(x_rad) * -1 # type: ignore
+    arr_x[1][2] = math.sin(x_rad) # type: ignore
+    arr_x[2][2] = math.cos(x_rad) # type: ignore
 
     m = MatrixMult(arr_x,arr_y)
     m = MatrixMult(m,arr_z)
