@@ -110,8 +110,7 @@ def start(vertices,faces):
         # todo : add the translate
         I = matrix.MatrixMult(matrix.RotateMatrix(x_rotation,y_rotation,z_rotation), matrix.ScaleMatrix(x_scalar,y_scalar,z_scalar))
         
-        print(center_x,center_y,center_z)
-        matrix.PrintMatrix(I)
+        # matrix.PrintMatrix(I)
 
         for surface in surfaces.surface_list:
             
@@ -167,8 +166,11 @@ def start(vertices,faces):
         pygame.display.flip()
 
 if __name__ == '__main__':
-    vertices = loader.load_vertices()
-    surfaces = loader.load_surfaces()
+    print("loading vertices from database ...")
+    vertices = loader.load_vertices_db()
+    print("loading surfaces from database ...")
+    surfaces = loader.load_surfaces_db()
+    print('rendering ...')
     start(vertices,surfaces)
-else :
-    print(__name__)
+
+
