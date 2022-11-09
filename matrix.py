@@ -110,5 +110,3 @@ if (__name__ == '__main__'):
     PrintMatrix(ScaleMatrix(3,6,9))
 
     PrintMatrix(TranslateMatrix(0.5,0.5,0.5))
-else :
-    print(__name__)
