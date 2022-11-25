@@ -88,6 +88,44 @@ def TranslateMatrix(x,y,z):
     m[3][2] = z
     return(m)
 
+def VectorMagnitude(v) ->float:
+    return math.sqrt((v[0]*v[0])+(v[1]*v[1])+(v[2]*v[2]))
+    
+def NormaliseVector(v):
+    r = [0,0,0]
+    denom = VectorMagnitude(v)
+
+    if denom == 0.0:
+        r[0] = v[0]
+        r[1] = v[1]
+        r[2] = v[2]
+    else:
+        t = 1.0 / denom
+        r[0] = v[0]*t
+        r[1] = v[1]*t
+        r[2] = v[2]*t
+    return r
+
+def DotProduct(v1,v2):
+    return ( (v1[0]*v2[0]) + (v1[1]*v2[1]) + (v1[2]*v2[2]) )
+
+def CalcSurfaceNormal(v1,v2,v3):
+        
+    # First calculate colinnear vectors
+    a = [v2[0]-v1[0],v2[1]-v1[1],v2[2]-v1[2]]
+    b = [v3[0]-v2[0],v3[1]-v2[1],v3[2]-v2[2]]
+
+    # Calculate the normal and return it
+    x = a[1] * b[2] - a[2] * b[1]
+    y = a[2] * b[0] - a[0] * b[2]
+    z = a[0] * b[1] - a[1] * b[0]
+
+    return [x,y,z]
+
+def CalcVertexNormal(v):
+    totalvec = [0,0,0]
+    
+
 def PrintMatrix(m):
     for n in m:
         print(n)
@@ -110,3 +148,19 @@ if (__name__ == '__main__'):
     PrintMatrix(ScaleMatrix(3,6,9))
 
     PrintMatrix(TranslateMatrix(0.5,0.5,0.5))
+
+    v1 = [0,0,0]
+    v2 = [1,2,3]
+    v3 = [4,5,6]
+    v4 = [0.343,0.423,0.122]
+    v5 = [-0.123,-0.987,-0.876]
+
+    print(NormaliseVector(v1))
+    print(NormaliseVector(v2))
+    print(NormaliseVector(v3))
+
+    print(DotProduct(v1,v2))
+    print(DotProduct(v3,v4))
+    print(DotProduct(v5,v2))
+
+    print(calcNormal(v1,v2,v3))

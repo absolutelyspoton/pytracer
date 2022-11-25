@@ -20,7 +20,7 @@ def load_vertices():
         line_count = 0
         for row in csv_reader:
             if line_count > 0:
-                v = V.vertex(x=float(row[0]),y=float(row[1]),z=float(row[2]))
+                v = V.vertex(wx=float(row[0]),wy=float(row[1]),wz=float(row[2]))  # type: ignore
                 vl.add_vertex(v)
             line_count += 1
     return(vl)    
@@ -34,7 +34,7 @@ def load_vertices_db():
     vl = V.vertices()
     
     for i in j:
-        v = V.vertex(x=i['x'],y=i['y'],z=i['z'])
+        v = V.vertex(wx=float(i['x']),wy=float(i['y']),wz=float(i['z']))  # type: ignore
         vl.add_vertex(v)
 
     return(vl)
@@ -47,7 +47,7 @@ def load_surfaces():
         line_count = 0
         for row in csv_reader:
             if line_count > 0: 
-                face = S.face()
+                face = S.surface_cell()
                 face.add_face_index(row)
                 surfaces.add_face(face)
             line_count += 1
@@ -64,7 +64,7 @@ def load_surfaces_db():
         a.append(i['x'])
         a.append(i['y'])
         a.append(i['z'])
-        face = S.face()
+        face = S.surface_cell()
         face.add_face_index(a)
         surfaces.add_face(face)
     

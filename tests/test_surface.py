@@ -6,7 +6,7 @@
 import surface 
 
 def test_create_surface_object1():
-    f = surface.face()
+    f = surface.surface_cell()
     s = surface.surface()
     s.add_face(f)
     assert s.surface_count() == 1

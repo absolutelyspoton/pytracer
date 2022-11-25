@@ -4,16 +4,34 @@
 # Classes for modelling vertices
 
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from devtools import debug
+import matrix
+import math
 
 class vertex(BaseModel):
-    x:float
-    y:float
-    z:float
+    wx:float = 0.0
+    wy:float = 0.0
+    wz:float = 0.0
+    tx:Optional[float] = 0.0
+    ty:Optional[float] = 0.0
+    tz:Optional[float] = 0.0
+    vx:Optional[float] = 0.0
+    vy:Optional[float] = 0.0
+    vz:Optional[float] = 0.0
 
-    def normal(self,normal):
+    # calc linear transform of world coordinates to transformed coordinates, store results
+    def calc_transform(self,I) -> None:
+        t = matrix.MatrixVector(I,[self.wx,self.wy,self.wz])
+        self.tx = t[0] 
+        self.ty = t[1] 
+        self.tz = t[2] 
+        return None
+
+    def calc_normal(self,normal) -> None:
         self.normal = normal
+        return None
+
 
 class vertices(BaseModel):
     vertex_list: List = []
@@ -26,12 +44,11 @@ class vertices(BaseModel):
 
 if __name__ == '__main__':
 
-    v1 = vertex(x=1.0,y=2.0,z=3.0)
-    v2 = vertex(x=2.0,y=3.0,z=4.0)
+    w1 = vertex(wx=1.0,wy=2.0,wz=3.0)
+    w2 = vertex(wx=4.0,wy=5.0,wz=6.0)
     
     vl = vertices() 
 
-    vl.add_vertex(v1)
-    vl.add_vertex(v2)
+    vl.add_vertex(w1)
+    vl.add_vertex(w2)
     
-        

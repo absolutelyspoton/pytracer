@@ -6,6 +6,7 @@ import requests
 from typing import List
 
 from bson.json_util import dumps, loads
+from fastapi.responses import PlainTextResponse
 
 app = FastAPI()
 
@@ -17,8 +18,8 @@ class PingTypes(str, Enum):
     db = "database"
     g = "google"
 
-@app.get('/ping/{pingtype}')
-async def ping(pingtype:PingTypes) -> float:
+@app.get('/ping/{pingtype}',response_class=PlainTextResponse)
+async def ping(pingtype:PingTypes):
 
     t:float = time.perf_counter()
 
@@ -33,7 +34,11 @@ async def ping(pingtype:PingTypes) -> float:
     else:
         print(pingtype)
 
-    return (time.perf_counter() - t)
+    t2 = time.perf_counter() - t
+    t3 = str(t2)
+    t4 = 'my_metric{label="a"}' + ' ' + t3 + "\n"
+    print(t4)
+    return t4
 
 @app.get('/db/{database}/{table}/{id}')
 async def get_data(database:str,table:str,id:int):
@@ -48,7 +53,7 @@ async def get_data(database:str,table:str,id:int):
 
     d = dumps(result)
     l = loads(d)
-
+    
     print('Rows in collection:',len(l))
     return (l)
 
@@ -67,5 +72,3 @@ if __name__ == '__main__':
 
     for i in p:
         print(i)
-
-    pass
