@@ -5,11 +5,11 @@
 
 from pydantic import BaseModel
 from typing import List
-from devtools import debug
 
-class face(BaseModel):
+class surface_cell(BaseModel):
     vertex_list: List = []
     normal: List = []
+    culled = False
 
     # add index to the index list for this face
     def add_face_index(self,vl:List):
@@ -19,27 +19,14 @@ class face(BaseModel):
     def face_index_count(self):
         return(len(self.vertex_list)) 
 
-    def calcNormal(self,v1,v2,v3):
-            
-        # First calculate colinnear vectors
-        vect1 = [v3[0]-v2[0],v3[1]-v2[1],v3[2]-v2[2]]
-        vect2 = [v2[0]-v1[0],v2[1]-v1[1],v2[2]-v1[2]]
-
-        # Calculate the normal
-        x = vect1[1] * vect2[2] - vect1[2] * vect2[1]
-        y = vect1[2] * vect2[0] - vect1[0] * vect2[2]
-        z = vect1[0] * vect2[1] - vect1[1] * vect2[0]
-
-        # Store it
-        self.normal = [x,y,z]
-
 class surface(BaseModel):
     surface_list: List = []
 
-    def add_face(self,f:face):
+    def add_face(self,f:surface_cell) -> None:
         self.surface_list.append(f)
+        return None
 
-    def surface_count(self):
+    def surface_count(self) -> int:
         return(len(self.surface_list))
 
 
