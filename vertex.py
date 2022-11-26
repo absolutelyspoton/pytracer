@@ -5,33 +5,42 @@
 
 from pydantic import BaseModel
 from typing import List, Optional
-from devtools import debug
 import matrix
-import math
 
 class vertex(BaseModel):
-    wx:float = 0.0
-    wy:float = 0.0
-    wz:float = 0.0
-    tx:Optional[float] = 0.0
-    ty:Optional[float] = 0.0
-    tz:Optional[float] = 0.0
-    vx:Optional[float] = 0.0
-    vy:Optional[float] = 0.0
-    vz:Optional[float] = 0.0
+    x_world:float = 0.0
+    y_world:float = 0.0
+    z_world:float = 0.0
+    x_view:Optional[float] = 0.0
+    y_view:Optional[float] = 0.0
+    z_view:Optional[float] = 0.0
+    x_screen:Optional[float] = 0.0
+    y_screen:Optional[float] = 0.0
+    z_screen:Optional[float] = 0.0
+    index:Optional[int] = 0
+    normal:Optional[List] = []
 
     # calc linear transform of world coordinates to transformed coordinates, store results
-    def calc_transform(self,I) -> None:
-        t = matrix.MatrixVector(I,[self.wx,self.wy,self.wz])
-        self.tx = t[0] 
-        self.ty = t[1] 
-        self.tz = t[2] 
+    def calc_view_coordinates(self,I) -> None:
+        t = matrix.MatrixVector(I,[self.x_world,self.y_world,self.z_world])
+        self.x_view = t[0] 
+        self.y_view = t[1] 
+        self.z_view = t[2] 
+        # s = matrix.MatrixMult(matrix.OrthographicMatrix(),[self.x_view,self.y_view,self.z_view])
+
+        return None
+
+    def calc_screen_coordinates(self,I) -> None:
+        t = matrix.MatrixVector(I,[self.x_view,self.y_view,self.z_view])
+        self.x_screen = t[0] 
+        self.y_screen = t[1] 
+        self.z_screen = t[2] 
+
         return None
 
     def calc_normal(self,normal) -> None:
         self.normal = normal
         return None
-
 
 class vertices(BaseModel):
     vertex_list: List = []
@@ -44,11 +53,13 @@ class vertices(BaseModel):
 
 if __name__ == '__main__':
 
-    w1 = vertex(wx=1.0,wy=2.0,wz=3.0)
-    w2 = vertex(wx=4.0,wy=5.0,wz=6.0)
+    w1 = vertex(x_world=1.0,y_world=2.0,z_world=3.0)
+    w2 = vertex(x_world=4.0,y_world=5.0,z_world=6.0)
     
     vl = vertices() 
 
     vl.add_vertex(w1)
     vl.add_vertex(w2)
+
+    print(vl)
     
