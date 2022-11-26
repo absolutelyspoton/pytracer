@@ -36,9 +36,9 @@ def MatrixMult(m1,m2):
     return(mz)
 
 def MatrixVector(m,v):
-    x = m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2] + m[0][3]
-    y = m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2] + m[1][3]
-    z = m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2] + m[2][3]
+    x = m[0][0] * v[0] + m[1][0] * v[1] + m[2][0] * v[2] + m[3][0]
+    y = m[0][1] * v[0] + m[1][1] * v[1] + m[2][1] * v[2] + m[3][1]
+    z = m[0][2] * v[0] + m[1][2] * v[1] + m[2][2] * v[2] + m[3][2]
     return ([x,y,z])
 
 # Matrix maths to rotate through x,y,z axis
@@ -86,6 +86,18 @@ def TranslateMatrix(x,y,z):
     m[3][0] = x
     m[3][1] = y
     m[3][2] = z
+    m[3][3] = 1
+    return(m)
+
+def PerspectiveMatrix():
+    m = IdentityMatrix()
+    m[2][3] = 0.1  # type: ignore
+    m[3][3] = 0
+    return(m)
+
+def OrthographicMatrix():
+    m = IdentityMatrix()
+    m[2][2] = 0
     return(m)
 
 def VectorMagnitude(v) ->float:
@@ -122,14 +134,9 @@ def CalcSurfaceNormal(v1,v2,v3):
 
     return [x,y,z]
 
-def CalcVertexNormal(v):
-    totalvec = [0,0,0]
-    
-
 def PrintMatrix(m):
     for n in m:
         print(n)
-
 
 if (__name__ == '__main__'):
     
@@ -149,6 +156,10 @@ if (__name__ == '__main__'):
 
     PrintMatrix(TranslateMatrix(0.5,0.5,0.5))
 
+    PrintMatrix(OrthographicMatrix())
+
+    PrintMatrix(PerspectiveMatrix())
+
     v1 = [0,0,0]
     v2 = [1,2,3]
     v3 = [4,5,6]
@@ -163,4 +174,4 @@ if (__name__ == '__main__'):
     print(DotProduct(v3,v4))
     print(DotProduct(v5,v2))
 
-    print(calcNormal(v1,v2,v3))
+    print(CalcSurfaceNormal(v1,v2,v3))
