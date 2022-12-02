@@ -1,4 +1,8 @@
+# Key Development Highlights
 
+1. Data loaders - File, Restful API, and MongDB ( Local Container and MongoDB Atlas )
+2. Implementation of Linear Transforms for a 3D World Coordinate System ( Scale, Rotate, Translate )
+3. Use of pydantic module for strict typing / linting and use with FastAPI ( opposed to dataclasses modules )
 
 # MongoDB Setup
 
