@@ -1,3 +1,8 @@
+# Author: Dominic Williams
+# Date created: 
+# 
+# Service Layer - Generic API Access Layer to MongoDB
+
 from fastapi import FastAPI
 from pymongo import MongoClient
 from enum import Enum
@@ -51,6 +56,7 @@ async def get_data(database:str,table:str,id:int):
     projection = {'id':0,'_id':0}
     result = client[database][table].find(filter=filter,projection=projection)
 
+    # Return as json object / coding hack to force type
     d = dumps(result)
     l = loads(d)
     
@@ -60,7 +66,7 @@ async def get_data(database:str,table:str,id:int):
 if __name__ == '__main__':
     client = MongoClient('mongodb://localhost:27017/')
     filter = {'id':1}
-    # projection = {}
+
     projection = {'id':0,'_id':0}
     result = client['3dobject']['vertices'].find(filter=filter,projection=projection)
 

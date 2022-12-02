@@ -1,7 +1,7 @@
 # Author: Dominic Williams
 # Date created: 10 Aug 2022
 # 
-# Simple Wireframe Viewing System
+# Simple Wireframe Viewing System using pygame for 2Dgraphical drawing system
 
 import pygame
 import loader 
