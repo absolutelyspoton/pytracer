@@ -10,7 +10,6 @@ import sys
 import math
 import surface
 import vertex
-import random
 
 INPUT_DATA_SOURCE = 'file' # 'db' or 'file'
 SCREEN_WIDTH = 1024
@@ -42,7 +41,7 @@ def CalcVectorNormals():
 
 def CalcTransforms(x_scalar,y_scalar,z_scalar,x_rotation,y_rotation,z_rotation,x_translation,y_translation,z_translation):
    
-   # Calc linear transforms for scaling, rotation and TODO: translation
+    # Calc linear transforms for scaling, rotation and TODO: translation
     MS = matrix.ScaleMatrix(x_scalar,y_scalar,z_scalar)
     MR = matrix.RotateMatrix(x_rotation,y_rotation,z_rotation)        
     MT = matrix.TranslateMatrix(x_translation,y_translation,z_translation)
