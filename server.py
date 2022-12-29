@@ -10,7 +10,6 @@ import time
 import requests
 from typing import List
 import credentials
-import logging
 
 from bson.json_util import dumps, loads
 from fastapi.responses import PlainTextResponse
