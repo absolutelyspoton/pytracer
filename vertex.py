@@ -1,6 +1,11 @@
 # Author: Dominic Williams
 # Date created: 10 Aug 2022
-# 
+# This code defines two classes, vertex and vertices, for modeling and storing information about 
+# 3D vertices. The vertex class contains various attributes for storing information about a 
+# single vertex, such as its world and screen coordinates. The vertices class is a container 
+# for a list of vertex objects, and contains methods for adding new vertices to the list and 
+# getting the number of vertices in the list
+
 # Classes for modelling vertices
 
 from pydantic import BaseModel

@@ -10,11 +10,9 @@ GUI Commands
 |--------------|-----------------------------------------------|
 |C             |Centre drawing / Reset                         |
 |Arrow Keys    |Shift Up/Down/Left/Right                       |
-|Plus/Minus    |Zoom In/Out                                    |
-|Q/W           |Rotate X-Axis                                  |
-|A/S           |Rotate Y-Axis                                  |
-|Z/X           |Rotate Z-Axis                                  |
-|SPACE         |Toggle spin around x,y,z axis                  |
+|+|-           |Zoom In/Out                                    |
+|x|y|z         |Spin object through X-Axis, Y-Axis, Z-Axis     |
+|a             |Display X/Y/Z Axis Legend                      |
 |n             |Toggle display of vertex normals               |
 |f             |Toggle display of surfaces (polygons)          |
 
