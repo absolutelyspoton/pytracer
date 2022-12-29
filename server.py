@@ -9,6 +9,8 @@ from enum import Enum
 import time
 import requests
 from typing import List
+import credentials
+import logging
 
 from bson.json_util import dumps, loads
 from fastapi.responses import PlainTextResponse
@@ -16,7 +18,7 @@ from fastapi.responses import PlainTextResponse
 app = FastAPI()
 
 DEV_MONGODB_ADDRESS = 'mongodb://localhost:27017/'
-DEV_MONGODB_ADDRESS = 'mongodb+srv://admin:dA3X1oNdYsj1lgyk@cluster0.iyzootc.mongodb.net/test'
+DEV_MONGODB_ADDRESS = 'mongodb+srv://{}:{}@cluster0.iyzootc.mongodb.net/test'
 GOOGLE_ADDRESS = 'http://www.google.com'
 
 class PingTypes(str, Enum):
@@ -29,8 +31,10 @@ async def ping(pingtype:PingTypes):
 
     t:float = time.perf_counter()
 
+    connection_string =DEV_MONGODB_ADDRESS.format(credentials.MONGODB_ADMIN_USERNAME,credentials.MONGODB_ADMIN_PASSWORD)
+
     if pingtype == PingTypes.db:
-        client = MongoClient(DEV_MONGODB_ADDRESS)
+        client = MongoClient(connection_string)
         client.close()
     elif pingtype == PingTypes.ws:
         pass
@@ -48,7 +52,9 @@ async def ping(pingtype:PingTypes):
 
 @app.get('/db/{database}/{table}/{id}')
 async def get_data(database:str,table:str,id:int):
-    client = MongoClient(DEV_MONGODB_ADDRESS)
+
+    connection_string =DEV_MONGODB_ADDRESS.format(credentials.MONGODB_ADMIN_USERNAME,credentials.MONGODB_ADMIN_PASSWORD)
+    client = MongoClient(connection_string)
     if id == 0:
         filter = {}
     else:
@@ -65,7 +71,8 @@ async def get_data(database:str,table:str,id:int):
     return (l)
 
 if __name__ == '__main__':
-    client = MongoClient(DEV_MONGODB_ADDRESS)
+    connection_string =DEV_MONGODB_ADDRESS.format(credentials.MONGODB_ADMIN_USERNAME,credentials.MONGODB_ADMIN_PASSWORD)
+    client = MongoClient(connection_string)
     filter = {'id':1}
 
     projection = {'id':0,'_id':0}
