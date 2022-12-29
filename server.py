@@ -16,6 +16,7 @@ from fastapi.responses import PlainTextResponse
 app = FastAPI()
 
 DEV_MONGODB_ADDRESS = 'mongodb://localhost:27017/'
+DEV_MONGODB_ADDRESS = 'mongodb+srv://admin:dA3X1oNdYsj1lgyk@cluster0.iyzootc.mongodb.net/test'
 GOOGLE_ADDRESS = 'http://www.google.com'
 
 class PingTypes(str, Enum):
@@ -64,11 +65,11 @@ async def get_data(database:str,table:str,id:int):
     return (l)
 
 if __name__ == '__main__':
-    client = MongoClient('mongodb://localhost:27017/')
+    client = MongoClient(DEV_MONGODB_ADDRESS)
     filter = {'id':1}
 
     projection = {'id':0,'_id':0}
-    result = client['3dobject']['vertices'].find(filter=filter,projection=projection)
+    result = client['3dObjects']['vertices'].find(filter=filter,projection=projection)
 
     j = dumps(result)
     print(j)
