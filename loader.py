@@ -10,8 +10,8 @@ import requests
 import json
 import pymongo
 
-DEV_API_ENDPOINT_VERTICES = 'http://127.0.0.1:8000/db/3dobject/vertices/1'
-DEV_API_ENDPOINT_SURFACES = 'http://127.0.0.1:8000/db/3dobject/surfaces/1'
+DEV_API_ENDPOINT_VERTICES = 'http://127.0.0.1:8000/db/3dObjects/vertices/1'
+DEV_API_ENDPOINT_SURFACES = 'http://127.0.0.1:8000/db/3dObjects/surfaces/1'
 
 def load_vertices_file():
     fn = './objects/utah_teapot_vertices.csv'
