@@ -6,6 +6,8 @@
 #
 # Simple Wireframe Viewing System using pygame for 2D graphical drawing system
 
+import time
+
 import numpy as np
 import pygame
 import sys
@@ -17,6 +19,7 @@ import matrix
 import mesh as mesh_module
 import render
 import shadow
+import tracer
 import viewer_state
 import viewport
 
@@ -75,7 +78,7 @@ def start():
         'a - Toggle axis legend',
         'n/v - Toggle vertex normals',
         'f - Toggle faces',
-        's - Cycle render: wire/hidden-line/solid/gouraud/phong',
+        's - Cycle render: wire/hidden/solid/gouraud/phong/raytrace',
         'd - Toggle shadows',
         'b - Toggle backface culling (wireframe)',
         'h - Toggle this help',
@@ -185,11 +188,6 @@ def start():
                 screen.blit(hq_image, (vp.x, vp.y))
                 displayed_faces = hq_faces
             else:
-                ssaa = (SSAA_STILL if still_frames >= STILL_FRAMES_FOR_HQ
-                        else SSAA_INTERACTIVE)
-                buf_surface, frame = buffers[ssaa]
-                buf_w, buf_h = frame.shape[0], frame.shape[1]
-
                 # Scene = model + floor geometry (the floor occludes and
                 # receives shadows like everything else)
                 D = state.camera.distance
@@ -214,6 +212,37 @@ def start():
                 ok = (~scene_clipped[scene_faces].any(axis=1)) & (scene_facing > 0)
                 draw_faces_arr = scene_faces[ok]
                 displayed_faces = len(draw_faces_arr)
+
+                want_still = still_frames >= STILL_FRAMES_FOR_HQ
+
+                if mode == 'raytrace' and want_still:
+                    # Full ray trace into the cached-still slot: exact
+                    # shadows plus mirror reflections (see tracer.py)
+                    face_is_floor = np.concatenate(
+                        [np.zeros(len(faces), bool),
+                         np.ones(len(floor.faces), bool)])
+                    print('ray tracing still ...')
+                    rt_t0 = time.perf_counter()
+                    img = tracer.render_still(
+                        scene_view, scene_faces, scene_vnormals,
+                        face_is_floor, state.camera, vp, state.light,
+                        shadows_on=state.show_shadows, report=print)
+                    print(f'... done in {time.perf_counter() - rt_t0:.1f}s')
+                    pane = pygame.Surface((vp.width, vp.height))
+                    pygame.surfarray.blit_array(pane, img)
+                    hq_image = pane
+                    hq_faces = displayed_faces
+                    screen.blit(pane, (vp.x, vp.y))
+                    raster_this_frame = False
+                else:
+                    raster_this_frame = True
+
+            if hq_image is None and raster_this_frame:
+                ssaa = SSAA_STILL if want_still else SSAA_INTERACTIVE
+                # Raytrace mode shows the phong raster while interacting
+                shade_mode = 'phong' if mode == 'raytrace' else mode
+                buf_surface, frame = buffers[ssaa]
+                buf_w, buf_h = frame.shape[0], frame.shape[1]
 
                 buf_pts = (scene_screen - (vp.x, vp.y)) * ssaa
                 frags = render.rasterize(buf_pts, scene_view[:, 2],
@@ -242,7 +271,7 @@ def start():
                 if len(frags['x']):
                     frag_face_rows = frags['face']  # index into draw_faces_arr
 
-                    if mode == 'solid':
+                    if shade_mode == 'solid':
                         # Flat: light per FACE, shadow per face centroid
                         kept_centroids = scene_centroids[ok]
                         f_shadowed = (shadow_map.is_shadowed_batch(kept_centroids)
@@ -255,7 +284,7 @@ def start():
                         colors = face_colors[frag_face_rows].clip(0, 255) \
                                                             .astype(np.uint8)
 
-                    elif mode == 'gouraud':
+                    elif shade_mode == 'gouraud':
                         # Light and shadow per VERTEX, interpolate colours
                         v_shadowed = (shadow_map.is_shadowed_batch(scene_view)
                                       if shadow_map is not None else None)

@@ -17,7 +17,8 @@ class ViewerState:
     ROTATION_INCREMENT_DEG = 25
     TRANSLATION_INCREMENT = 0.25  # world units (model is ~3.5 units in radius)
     DOLLY_MULTIPLIER = 1.1
-    RENDER_MODES = ['wireframe', 'hidden-line', 'solid', 'gouraud', 'phong']
+    RENDER_MODES = ['wireframe', 'hidden-line', 'solid', 'gouraud', 'phong',
+                    'raytrace']
 
     def __init__(self, screen_width, screen_height):
         # Model transformations (world units; the model loads at its raw size)

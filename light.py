@@ -73,12 +73,27 @@ def phong_intensity(normal, point_view, light):
     return (min(base, 1.0), min(spec, 1.0))
 
 
-def phong_shade_batch(normals, points, light, shadowed=None):
+# Ray-tracing materials (fraction of light mirrored; checkerboard floor)
+MODEL_REFLECTIVITY = 0.5
+FLOOR_REFLECTIVITY = 0.25
+CHECKER_LIGHT = (225, 225, 230)
+CHECKER_DARK = (55, 55, 65)
+CHECKER_TILE = 2.0  # world units per checker square
+
+
+def phong_shade_batch(normals, points, light, shadowed=None, view_dirs=None,
+                      base_colors=None):
     """Vectorised Phong reflection model.
 
-    normals:  (N, 3) unit normals, view space
-    points:   (N, 3) view-space positions (camera at the origin)
-    shadowed: optional (N,) bool - shadowed samples keep ambient only
+    normals:   (N, 3) unit normals, view space
+    points:    (N, 3) view-space positions (camera at the origin)
+    shadowed:  optional (N,) bool - shadowed samples keep ambient only
+    view_dirs: optional (N, 3) unit vectors from each point toward the
+               viewer. Defaults to -point/|point| (the camera at the view
+               origin); ray-traced bounces pass -ray_direction instead.
+    base_colors: optional (N, 3) per-sample material colour; defaults to
+               MATERIAL_BASE_COLOR (the ray tracer passes checker colours
+               for floor hits).
     Returns (N, 3) uint8 colours.
     """
     n = np.asarray(normals)
@@ -96,11 +111,15 @@ def phong_shade_batch(normals, points, light, shadowed=None):
     spec = np.zeros(len(n))
     if lit.any():
         nl = n[lit]
-        pl = p[lit]
         refl = 2.0 * n_dot_l[lit, None] * nl - L
-        p_len = np.linalg.norm(pl, axis=1)
-        p_len[p_len < 1e-9] = 1.0
-        r_dot_v = -np.einsum('ij,ij->i', refl, pl) / p_len
+        if view_dirs is not None:
+            r_dot_v = np.einsum('ij,ij->i', refl,
+                                np.asarray(view_dirs)[lit])
+        else:
+            pl = p[lit]
+            p_len = np.linalg.norm(pl, axis=1)
+            p_len[p_len < 1e-9] = 1.0
+            r_dot_v = -np.einsum('ij,ij->i', refl, pl) / p_len
         pos = r_dot_v > 0.0
         s = np.zeros(len(nl))
         s[pos] = SPECULAR_COEFF * light.specular * r_dot_v[pos] ** SHININESS
@@ -108,8 +127,13 @@ def phong_shade_batch(normals, points, light, shadowed=None):
 
     np.clip(base, None, 1.0, out=base)
     np.clip(spec, None, 1.0, out=spec)
-    colors = (np.outer(base, np.asarray(MATERIAL_BASE_COLOR, dtype=np.float64))
-              + 255.0 * spec[:, None])
+    if base_colors is None:
+        colors = (np.outer(base, np.asarray(MATERIAL_BASE_COLOR,
+                                            dtype=np.float64))
+                  + 255.0 * spec[:, None])
+    else:
+        colors = (base[:, None] * np.asarray(base_colors, dtype=np.float64)
+                  + 255.0 * spec[:, None])
     return np.clip(colors, 0, 255).astype(np.uint8)
 
 

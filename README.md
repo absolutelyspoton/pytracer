@@ -15,7 +15,7 @@ GUI Commands
 |a             |Display X/Y/Z Axis Legend                      |
 |n|v           |Toggle display of vertex normals               |
 |f             |Toggle display of surfaces (polygons)          |
-|s             |Cycle render mode: wireframe / hidden-line / solid / gouraud / phong |
+|s             |Cycle render mode: wireframe / hidden-line / solid / gouraud / phong / raytrace |
 |d             |Toggle shadows (floor shadow; self-shadowing in stills) |
 |b             |Toggle backface culling (wireframe mode)       |
 |h             |Toggle help overlay                            |
@@ -37,5 +37,7 @@ Feature History
 |1.0           |Phong Shading (per-pixel normal interpolation, scanline rasteriser)      |
 |1.1           |Gauraud Shading (per-vertex lighting, colour interpolation)              |
 |1.2           |Shadows (planar projected on ground plane; shadow-mapped self-shadowing) |
+|1.5           |v3: numpy array pipeline - z-buffer rasteriser, live self-shadowing      |
+|2.0           |Ray tracing - primary/shadow/reflection rays, mirror materials           |
 |1.3 (todo)    |Multiple light source                                                    |
 

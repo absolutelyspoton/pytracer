@@ -85,6 +85,16 @@ upgrades over v2:
 The pipeline's flat-array shape (batch geometry in, batch shaded samples
 out) is the same structure the ray tracer needs - rays replace fragments.
 
+## Ray tracing (rev 2.0)
+
+`raytrace` on the `s` cycle: the phong raster renders while the view moves;
+when it settles, `tracer.py` traces the full frame (~16s at 800x600) and
+caches it. Batched Moller-Trumbore over a two-level cluster structure
+(median-split AABBs), exact shadow rays (no map, no bias), and 2 mirror
+bounces - the silver teapot reflects the floor and its own spout, the floor
+faintly reflects the teapot. Ray counts for the default pose: 480k primary,
+230k shadow, 230k+22k reflection rays.
+
 ## Branches
 
 - **main**: v2 complete (tagged `v2`)
