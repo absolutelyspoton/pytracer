@@ -1,7 +1,7 @@
 # Author: Dominic Williams
 # Date created: 10 Aug 2022
-# 
-# Helpers to load vertices and surfaces from file
+#
+# Loaders for vertices and surfaces from file or API
 
 import csv
 import surface as S
@@ -14,71 +14,54 @@ import matrix
 DEV_API_ENDPOINT_VERTICES = 'http://127.0.0.1:8000/db/3dObjects/vertices/1'
 DEV_API_ENDPOINT_SURFACES = 'http://127.0.0.1:8000/db/3dObjects/surfaces/1'
 
-def load_vertices_file():
-    fn = './objects/utah_teapot_vertices.csv'
+def _load_vertices_generic(data_source):
+    """Load vertices from an iterable of (x, y, z) tuples."""
     vl = V.vertices()
+    for idx, (x, y, z) in enumerate(data_source, start=1):
+        v = V.vertex(x_world=float(x), y_world=float(y), z_world=float(z))
+        v.index = idx
+        vl.add_vertex(v)
+    return vl
+
+def _load_surfaces_generic(data_source):
+    """Load surfaces from an iterable of vertex-index lists."""
+    surfaces = S.surface()
+    for idx, indices in enumerate(data_source, start=1):
+        face = S.surface_cell()
+        face.index = idx
+        face.add_face_index([int(x) for x in indices])
+        surfaces.add_face(face)
+    return surfaces
+
+def load_vertices_file():
+    """Load vertices from CSV file."""
+    fn = './objects/utah_teapot_vertices.csv'
     with open(fn) as csv_file:
-        csv_reader = csv.reader(csv_file,delimiter=',')
-        line_count = 0
-        for row in csv_reader:
-            if line_count > 0:
-                v = V.vertex(x_world=float(row[0]),y_world=float(row[1]),z_world=float(row[2]))  # type: ignore
-                v.index = line_count
-                vl.add_vertex(v)
-            line_count += 1
-    return(vl)    
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        next(csv_reader)  # skip header
+        return _load_vertices_generic((row[0], row[1], row[2]) for row in csv_reader)
 
 def load_vertices_api():
-
+    """Load vertices from API endpoint."""
     r = requests.get(DEV_API_ENDPOINT_VERTICES)
-    r.encoding='UTF-8'
-    j = json.loads(r.text)
-    
-    vl = V.vertices()
-    
-    record_count = 1
-    for i in j:
-        v = V.vertex(x_world=i['x'],y_world=i['y'],z_world=i['z']) 
-        v.index = record_count
-        vl.add_vertex(v)
-        record_count+=1
-
-    return(vl)
+    r.encoding = 'UTF-8'
+    data = json.loads(r.text)
+    return _load_vertices_generic((item['x'], item['y'], item['z']) for item in data)
 
 def load_surfaces_file():
-    surfaces = S.surface()
+    """Load surfaces from CSV file."""
     fn = './objects/utah_teapot_faces.csv'
     with open(fn) as csv_file:
-        csv_reader = csv.reader(csv_file,delimiter=',')
-        line_count = 0
-        for row in csv_reader:
-            if line_count > 0:
-                face = S.surface_cell()
-                face.index = line_count
-                face.add_face_index([int(x) for x in row])
-                surfaces.add_face(face)
-            line_count += 1
-    return(surfaces)
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        next(csv_reader)  # skip header
+        return _load_surfaces_generic((row[0], row[1], row[2]) for row in csv_reader)
 
 def load_surfaces_api():
-    surfaces = S.surface()
+    """Load surfaces from API endpoint."""
     r = requests.get(DEV_API_ENDPOINT_SURFACES)
-    r.encoding='UTF-8'
-    j = json.loads(r.text)
-
-    index = 1
-    for i in j:
-        a = []
-        a.append(i['x'])
-        a.append(i['y'])
-        a.append(i['z'])
-        face = S.surface_cell()
-        face.index = index
-        face.add_face_index(a)
-        surfaces.add_face(face)
-        index +=1
-    
-    return(surfaces)
+    r.encoding = 'UTF-8'
+    data = json.loads(r.text)
+    return _load_surfaces_generic((item['x'], item['y'], item['z']) for item in data)
 
 def compute_surface_normals(surfaces, vertices):
     """Calculate and cache surface normals from vertex positions.
