@@ -49,7 +49,8 @@ def load_mesh_api(name=DEFAULT_OBJECT):
     as a fallback for older databases.
     """
     def fetch(table):
-        r = requests.get(f'{DEV_API_BASE}/{table}/1')
+        # id=0 means "all rows" in the server's generic route
+        r = requests.get(f'{DEV_API_BASE}/{table}/0')
         r.encoding = 'UTF-8'
         return json.loads(r.text)
 

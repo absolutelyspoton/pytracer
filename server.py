@@ -17,7 +17,8 @@ from fastapi.responses import PlainTextResponse
 app = FastAPI()
 
 DEV_MONGODB_ADDRESS = 'mongodb://localhost:27017/'
-DEV_MONGODB_ADDRESS = 'mongodb+srv://{}:{}@cluster0.iyzootc.mongodb.net/test'
+# Atlas (cluster no longer exists - re-enable with a live cluster URL):
+# DEV_MONGODB_ADDRESS = 'mongodb+srv://{}:{}@cluster0.iyzootc.mongodb.net/test'
 GOOGLE_ADDRESS = 'http://www.google.com'
 
 class PingTypes(str, Enum):
