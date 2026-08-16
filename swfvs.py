@@ -210,11 +210,11 @@ def start():
 
         # Calc linear transforms for scaling, rotation and TODO: translation
         MS = matrix.ScaleMatrix(x_scalar,y_scalar,z_scalar)
-        MR = matrix.RotateMatrix(x_rotation,y_rotation,z_rotation)        
+        MR = matrix.RotateMatrix(x_rotation,y_rotation,z_rotation)
         MT = matrix.TranslateMatrix(x_translation,y_translation,z_translation)
         # Combine all three matrices into one
         M = matrix.MatrixMult(matrix.MatrixMult(MS,MR),MT)
-        
+
         MO = matrix.OrthographicMatrix()
         MP = matrix.PerspectiveMatrix()
 
@@ -237,7 +237,6 @@ def start():
 
                 # Backface culling: transform normal to view space and check if pointing toward camera
                 # Normal must be rotated (but not translated or scaled) by the rotation matrix only
-                MR = matrix.RotateMatrix(x_rotation, y_rotation, z_rotation)
                 normal_view = matrix.MatrixVector(MR, face.normal)
 
                 # Skip faces pointing away from camera (normal.z < 0 in view space)
