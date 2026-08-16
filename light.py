@@ -80,9 +80,15 @@ CHECKER_LIGHT = (225, 225, 230)
 CHECKER_DARK = (55, 55, 65)
 CHECKER_TILE = 2.0  # world units per checker square
 
+# Glass material (ray tracer only)
+GLASS_IOR = 1.5                        # index of refraction
+GLASS_TINT = (0.93, 0.97, 0.94)        # per-interface transmission filter
+GLASS_SHADOW_TRANSMISSION = 0.55       # light passing a glass occluder
+
 
 def phong_shade_batch(normals, points, light, shadowed=None, view_dirs=None,
-                      base_colors=None):
+                      base_colors=None, light_factor=None,
+                      diffuse_scale=1.0):
     """Vectorised Phong reflection model.
 
     normals:   (N, 3) unit normals, view space
@@ -94,6 +100,11 @@ def phong_shade_batch(normals, points, light, shadowed=None, view_dirs=None,
     base_colors: optional (N, 3) per-sample material colour; defaults to
                MATERIAL_BASE_COLOR (the ray tracer passes checker colours
                for floor hits).
+    light_factor: optional (N,) float in 0..1 - fraction of direct light
+               reaching each sample (0 = fully shadowed, between values
+               model partial occluders like glass). Overrides `shadowed`.
+    diffuse_scale: scales the diffuse term (glass shades specular-only
+               with diffuse_scale=0).
     Returns (N, 3) uint8 colours.
     """
     n = np.asarray(normals)
@@ -102,11 +113,18 @@ def phong_shade_batch(normals, points, light, shadowed=None, view_dirs=None,
 
     n_dot_l = n @ L
     lit = n_dot_l > 0.0
-    if shadowed is not None:
+    lf = None
+    if light_factor is not None:
+        lf = np.asarray(light_factor, dtype=np.float64)
+        lit = lit & (lf > 0.0)
+    elif shadowed is not None:
         lit = lit & ~np.asarray(shadowed)
 
     base = np.full(len(n), AMBIENT_COEFF * light.ambient)
-    base[lit] += DIFFUSE_COEFF * light.diffuse * n_dot_l[lit]
+    diffuse = (DIFFUSE_COEFF * light.diffuse * diffuse_scale) * n_dot_l[lit]
+    if lf is not None:
+        diffuse = diffuse * lf[lit]
+    base[lit] += diffuse
 
     spec = np.zeros(len(n))
     if lit.any():
@@ -123,6 +141,8 @@ def phong_shade_batch(normals, points, light, shadowed=None, view_dirs=None,
         pos = r_dot_v > 0.0
         s = np.zeros(len(nl))
         s[pos] = SPECULAR_COEFF * light.specular * r_dot_v[pos] ** SHININESS
+        if lf is not None:
+            s = s * lf[lit]
         spec[lit] = s
 
     np.clip(base, None, 1.0, out=base)

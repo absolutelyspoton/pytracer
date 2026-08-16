@@ -18,6 +18,7 @@ GUI Commands
 |s             |Cycle render mode: wireframe / hidden-line / solid / gouraud / phong / raytrace |
 |d             |Toggle shadows (floor shadow; self-shadowing in stills) |
 |p             |Cycle ray-traced floor pattern: checker / stripes / rings / plain |
+|m             |Toggle ray-traced model material: silver / glass |
 |o             |Object menu (1-9 selects; objects/ CSVs or MongoDB collections) |
 |b             |Toggle backface culling (wireframe mode)       |
 |h             |Toggle help overlay                            |
@@ -41,5 +42,6 @@ Feature History
 |1.2           |Shadows (planar projected on ground plane; shadow-mapped self-shadowing) |
 |1.5           |v3: numpy array pipeline - z-buffer rasteriser, live self-shadowing      |
 |2.0           |Ray tracing - primary/shadow/reflection rays, mirror materials           |
+|2.1           |Refraction & glass (Snell, Fresnel/Schlick, total internal reflection)   |
 |1.3 (todo)    |Multiple light source                                                    |
 

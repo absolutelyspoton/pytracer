@@ -20,6 +20,7 @@ class ViewerState:
     RENDER_MODES = ['wireframe', 'hidden-line', 'solid', 'gouraud', 'phong',
                     'raytrace']
     FLOOR_PATTERNS = ['checker', 'stripes', 'rings', 'plain']
+    MATERIALS = ['silver', 'glass']
 
     def __init__(self, screen_width, screen_height):
         # Model transformations (world units; the model loads at its raw size)
@@ -41,6 +42,7 @@ class ViewerState:
         self.render_mode = 'wireframe'  # cycles: wireframe -> hidden-line -> solid
         self.show_shadows = True  # floor shadow + still self-shadowing (filled modes)
         self.floor_pattern = 'checker'  # ray-traced floor style ('p' cycles)
+        self.model_material = 'silver'  # ray-traced model material ('m' cycles)
 
         # Object selection ('o' opens the menu; swfvs performs the load)
         self.object_name = 'utah_teapot'
@@ -88,6 +90,11 @@ class ViewerState:
         """Advance the ray-traced floor pattern."""
         i = self.FLOOR_PATTERNS.index(self.floor_pattern)
         self.floor_pattern = self.FLOOR_PATTERNS[(i + 1) % len(self.FLOOR_PATTERNS)]
+
+    def cycle_material(self):
+        """Advance the ray-traced model material."""
+        i = self.MATERIALS.index(self.model_material)
+        self.model_material = self.MATERIALS[(i + 1) % len(self.MATERIALS)]
 
     def toggle_help(self):
         """Toggle help overlay."""
@@ -202,6 +209,10 @@ class InputHandler:
         elif key == pygame.K_p:
             self.state.cycle_floor_pattern()
             print(f'floor pattern: {self.state.floor_pattern} ...')
+
+        elif key == pygame.K_m:
+            self.state.cycle_material()
+            print(f'model material: {self.state.model_material} ...')
 
         elif key == pygame.K_o:
             self.state.show_object_menu = True
