@@ -39,36 +39,50 @@ def MatrixVector(m,v):
 
 # Matrix maths to rotate through x,y,z axis
 def RotateMatrix(x_theta,y_theta,z_theta):
+    """Compose XYZ rotation matrix directly without intermediate multiplications.
 
+    Directly computes (Rx * Ry) * Rz by calculating the 9 coefficients,
+    avoiding 2 full matrix multiplications (128 operations -> ~18 operations).
+
+    Verified formulas from symbolic expansion of rotation matrix products.
+    """
     x_rad = math.radians(x_theta)
     y_rad = math.radians(y_theta)
     z_rad = math.radians(z_theta)
 
-    # Rotation through z-axis
-    arr_z = IdentityMatrix()
-    arr_z[0][0] = math.cos(z_rad)  # type: ignore
-    arr_z[1][0] = math.sin(z_rad) * -1 # type: ignore
-    arr_z[0][1] = math.sin(z_rad) # type: ignore
-    arr_z[1][1] = math.cos(z_rad) # type: ignore
+    # Pre-compute sin/cos once
+    cx, sx = math.cos(x_rad), math.sin(x_rad)
+    cy, sy = math.cos(y_rad), math.sin(y_rad)
+    cz, sz = math.cos(z_rad), math.sin(z_rad)
 
-    # Rotation through y-axis
-    arr_y = IdentityMatrix()
-    arr_y[0][0] = math.cos(y_rad) # type: ignore
-    arr_y[2][0] = math.sin(y_rad) # type: ignore
-    arr_y[0][2] = math.sin(y_rad) * -1 # type: ignore
-    arr_y[2][2] = math.cos(y_rad) # type: ignore
+    # Build rotation matrix by direct coefficient calculation
+    m = [[0 for _ in range(4)] for _ in range(4)]
 
-    # Rotation through x-axis
-    arr_x = IdentityMatrix()
-    arr_x[1][1] = math.cos(x_rad) # type: ignore
-    arr_x[2][1] = math.sin(x_rad) * -1 # type: ignore
-    arr_x[1][2] = math.sin(x_rad) # type: ignore
-    arr_x[2][2] = math.cos(x_rad) # type: ignore
+    # Row 0
+    m[0][0] = cy * cz
+    m[0][1] = cy * sz
+    m[0][2] = -sy
+    m[0][3] = 0
 
-    m = MatrixMult(arr_x,arr_y)
-    m = MatrixMult(m,arr_z)
+    # Row 1
+    m[1][0] = sx * sy * cz - cx * sz
+    m[1][1] = cx * cz + sx * sy * sz
+    m[1][2] = sx * cy
+    m[1][3] = 0
 
-    return(m)
+    # Row 2
+    m[2][0] = cx * sy * cz + sx * sz
+    m[2][1] = cx * sy * sz - sx * cz
+    m[2][2] = cx * cy
+    m[2][3] = 0
+
+    # Row 3 (translation/homogeneous)
+    m[3][0] = 0
+    m[3][1] = 0
+    m[3][2] = 0
+    m[3][3] = 1
+
+    return m
 
 def ScaleMatrix(x,y,z):
     m = IdentityMatrix()
