@@ -235,6 +235,11 @@ def start():
                 # Surface normals are pre-computed at load time and cached in face.normal
                 # (no per-frame recalculation needed)
 
+                # Backface culling: skip faces pointing away from camera
+                # Camera is at origin looking down +Z, so cull if normal.z < 0
+                if face.normal[2] < 0:
+                    continue
+
                 # view plane transformation (basic TODO: add wiew point and proper perspective view plane transform )
                 # i.e. convert 3 dimensional coordinate onto 2 dimensional view plane ( impl parralel and perspective )
                 p = [(vertices.vertex_list[vertex_index_1].x_screen,
