@@ -174,18 +174,16 @@ def start():
             current_fps = clock.get_fps()
 
             # Build status string
-            faces_status = 'F' if state.draw_faces else '-'
-            normals_status = 'N' if state.draw_normals else '-'
-            axes_status = 'A' if state.draw_axes else '-'
-            cull_status = 'C' if state.backface_cull else '-'
+            faces_status = 'Faces' if state.draw_faces else 'no faces'
+            normals_status = 'Normals' if state.draw_normals else 'no normals'
+            axes_status = 'Axes' if state.draw_axes else 'no axes'
+            cull_status = 'Cull' if state.backface_cull else 'no cull'
 
             vertex_count = vertices.vertex_count()
             face_count = surfaces.surface_count()
 
             status_line = (
-                f'FPS: {current_fps:.1f}  |  '
-                f'Faces:{faces_status} Normals:{normals_status} Axes:{axes_status} Cull:{cull_status}  |  '
-                f'V:{vertex_count} F:{face_count}'
+                f'{current_fps:.0f} FPS  {faces_status}  {normals_status}  {axes_status}  {cull_status}  V:{vertex_count} F:{face_count}'
             )
 
             fps_text = font.render(status_line, True, COLOR_BLACK)
