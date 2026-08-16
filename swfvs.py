@@ -186,14 +186,14 @@ def start():
 
                     x_translation += translation_shift
 
-                if event.key == pygame.K_n:
+                if event.key == pygame.K_n or event.key == pygame.K_v:
 
                     if drawnormals:
                         drawnormals = False
-                        print('draw normals off ...')
+                        print('vertex normals off ...')
                     else:
                         drawnormals = True
-                        print('draw normals on ...')
+                        print('vertex normals on ...')
                         if not normals_calculated:
                             CalcVectorNormals()
                             normals_calculated = True
