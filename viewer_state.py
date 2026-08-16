@@ -19,8 +19,8 @@ class ViewerState:
     DOLLY_MULTIPLIER = 1.1
     RENDER_MODES = ['wireframe', 'hidden-line', 'solid', 'gouraud', 'phong',
                     'raytrace']
-    FLOOR_PATTERNS = ['checker', 'stripes', 'rings', 'plain']
-    MATERIALS = ['silver', 'glass']
+    FLOOR_PATTERNS = ['checker', 'stripes', 'rings', 'mandelbrot', 'plain']
+    MATERIALS = ['silver', 'glass', 'wood', 'marble']
 
     def __init__(self, screen_width, screen_height):
         # Model transformations (world units; the model loads at its raw size)

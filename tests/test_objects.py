@@ -69,15 +69,18 @@ def floor_only_render(pattern):
 
 def test_floor_patterns_are_distinct():
     images = {p: floor_only_render(p) for p in
-              ('checker', 'stripes', 'rings', 'plain')}
-    # Plain has a single floor shade; the others have two
+              ('checker', 'stripes', 'rings', 'mandelbrot', 'plain')}
+    # Plain has a single floor shade; the two-tone patterns exactly two
     assert len(np.unique(images['plain'][:, 20:, 0])) == 1
     for p in ('checker', 'stripes', 'rings'):
         assert len(np.unique(images[p][:, 20:, 0])) == 2
+    # Mandelbrot shades continuously: many escape-time levels
+    assert len(np.unique(images['mandelbrot'][:, 20:, 0])) > 5
     # The patterned layouts differ from each other
     assert not np.array_equal(images['checker'], images['stripes'])
     assert not np.array_equal(images['checker'], images['rings'])
     assert not np.array_equal(images['stripes'], images['rings'])
+    assert not np.array_equal(images['checker'], images['mandelbrot'])
 
 
 def test_progress_is_monotonic_and_completes():

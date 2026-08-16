@@ -82,7 +82,7 @@ def start():
         's - Cycle render: wire/hidden/solid/gouraud/phong/raytrace',
         'd - Toggle shadows',
         'p - Cycle floor pattern (raytrace)',
-        'm - Toggle material: silver/glass (raytrace)',
+        'm - Cycle material: silver/glass/wood/marble (raytrace)',
         'o - Object menu',
         'b - Toggle backface culling (wireframe)',
         'h - Toggle this help',
@@ -257,9 +257,11 @@ def start():
                 if mode == 'raytrace' and want_still:
                     # Full ray trace into the cached-still slot: exact
                     # shadows plus mirror reflections (see tracer.py)
-                    model_mat = (tracer.MAT_GLASS
-                                 if state.model_material == 'glass'
-                                 else tracer.MAT_SILVER)
+                    model_mat = {'silver': tracer.MAT_SILVER,
+                                 'glass': tracer.MAT_GLASS,
+                                 'wood': tracer.MAT_WOOD,
+                                 'marble': tracer.MAT_MARBLE}[
+                                     state.model_material]
                     face_materials = np.concatenate(
                         [np.full(len(faces), model_mat),
                          np.full(len(floor.faces), tracer.MAT_FLOOR)])
@@ -324,7 +326,8 @@ def start():
                         face_materials, state.camera, vp, state.light,
                         shadows_on=state.show_shadows, report=print,
                         floor_pattern=state.floor_pattern,
-                        progress=trace_progress, on_band=on_band)
+                        progress=trace_progress, on_band=on_band,
+                        view_to_object=np.linalg.inv(MV))
                     print(f'... done in {time.perf_counter() - rt_t0:.1f}s')
                     pane = pygame.Surface((vp.width, vp.height))
                     pygame.surfarray.blit_array(pane, img)

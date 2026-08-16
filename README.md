@@ -17,8 +17,8 @@ GUI Commands
 |f             |Toggle display of surfaces (polygons)          |
 |s             |Cycle render mode: wireframe / hidden-line / solid / gouraud / phong / raytrace |
 |d             |Toggle shadows (floor shadow; self-shadowing in stills) |
-|p             |Cycle ray-traced floor pattern: checker / stripes / rings / plain |
-|m             |Toggle ray-traced model material: silver / glass |
+|p             |Cycle ray-traced floor pattern: checker / stripes / rings / mandelbrot / plain |
+|m             |Cycle ray-traced model material: silver / glass / wood / marble |
 |o             |Object menu (1-9 selects; objects/ CSVs or MongoDB collections) |
 |b             |Toggle backface culling (wireframe mode)       |
 |h             |Toggle help overlay                            |

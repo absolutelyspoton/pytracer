@@ -124,3 +124,22 @@ def test_glass_shadow_is_partial_not_full():
     full_shadow_drop = (light.DIFFUSE_COEFF
                         * light.CHECKER_LIGHT[0])  # upper bound scale
     assert diff.max() < full_shadow_drop * (1 - 0.3)
+
+
+def test_wood_and_marble_materials_are_textured_and_distinct():
+    verts, faces, vnorms, materials = glass_panel_scene()
+    imgs = {}
+    for name, mid in (('wood', tracer.MAT_WOOD),
+                      ('marble', tracer.MAT_MARBLE)):
+        mats = materials.copy()
+        mats[:2] = mid
+        imgs[name] = trace_scene(materials_override=mats)
+    centre_wood = imgs['wood'][20:40, 15:30]
+    centre_marble = imgs['marble'][20:40, 15:30]
+    # Procedural textures give many shades, and the two materials differ
+    assert len(np.unique(centre_wood[..., 0])) > 5
+    assert len(np.unique(centre_marble[..., 0])) > 5
+    assert not np.array_equal(centre_wood, centre_marble)
+    # Wood is warm (R > B), marble is cool/neutral (B >= R on average)
+    assert centre_wood[..., 0].mean() > centre_wood[..., 2].mean()
+    assert centre_marble[..., 2].mean() >= centre_marble[..., 0].mean()

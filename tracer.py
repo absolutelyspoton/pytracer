@@ -29,6 +29,8 @@ OFFSET = 1e-3  # surface offset for secondary rays (scene units)
 MAT_SILVER = 0
 MAT_FLOOR = 1
 MAT_GLASS = 2
+MAT_WOOD = 3
+MAT_MARBLE = 4
 
 MAX_DEPTH = 6      # ray-tree depth (glass needs enter+exit+internal bounces)
 MIN_THROUGHPUT = 0.02
@@ -182,6 +184,73 @@ def _hit_normals(scene, hit, dirs):
     return n, entering
 
 
+MANDEL_ITERS = 40
+MANDEL_SCALE = 6.0     # world units per unit of the complex plane
+MANDEL_CENTER = (-0.5, 10.0)  # (re offset, floor z mapped to im = 0)
+
+
+def _mandelbrot_colors(points, lo, hi):
+    """Escape-time Mandelbrot over the floor plane, shaded between the two
+    checker colours (interior of the set = dark)."""
+    c = ((points[:, 0] / MANDEL_SCALE + MANDEL_CENTER[0])
+         + 1j * (points[:, 2] - MANDEL_CENTER[1]) / MANDEL_SCALE)
+    z = np.zeros_like(c)
+    escape = np.full(len(c), MANDEL_ITERS, dtype=np.int64)
+    alive = np.ones(len(c), dtype=bool)
+    for i in range(MANDEL_ITERS):
+        z[alive] = z[alive] ** 2 + c[alive]
+        escaped = alive & (np.abs(z) > 2.0)
+        escape[escaped] = i
+        alive &= ~escaped
+        if not alive.any():
+            break
+    t = np.sqrt(escape / MANDEL_ITERS)[:, None]  # 1.0 = interior
+    return hi + t * (lo - hi)  # fast escape = light, interior = dark
+
+
+def _wood_colors(p):
+    """Procedural wood: tree growth rings around the object's vertical
+    axis. Each ring has the asymmetric profile of real wood - a wide band
+    of light earlywood ending in a thin, sharp dark latewood line - with
+    turbulence wobbling the rings organically and fine streaks along the
+    grain. p in OBJECT space so the grain sticks to the surface as the
+    model rotates."""
+    lo = np.asarray(light_module.WOOD_DARK, dtype=np.float64)
+    hi = np.asarray(light_module.WOOD_LIGHT, dtype=np.float64)
+    x, y, z = p[:, 0], p[:, 1], p[:, 2]
+    r = np.sqrt(x ** 2 + z ** 2)
+    wobble = (0.35 * np.sin(2.3 * y + 1.7 * np.sin(1.1 * x))
+              + 0.18 * np.sin(3.9 * x + 2.0 * np.sin(1.4 * z))
+              + 0.10 * np.sin(5.3 * z + 0.8))
+    rings = 4.5 * (r + wobble)
+    v = rings - np.floor(rings)          # 0..1 across each growth ring
+    grain = (1.0 - v) ** 0.35            # sharp dark latewood boundary
+    grain *= 0.9 + 0.1 * np.sin(40.0 * r + 3.0 * y)  # fine streaking
+    return lo + np.clip(grain, 0.0, 1.0)[:, None] * (hi - lo)
+
+
+def _marble_colors(p):
+    """Procedural marble: sharp veins from turbulence-displaced sine sheets.
+    p in OBJECT space."""
+    vein = np.asarray(light_module.MARBLE_VEIN, dtype=np.float64)
+    base = np.asarray(light_module.MARBLE_LIGHT, dtype=np.float64)
+    x, y, z = p[:, 0], p[:, 1], p[:, 2]
+    turb = (np.sin(2.2 * x) * np.sin(1.7 * y + 0.5)
+            + np.sin(3.1 * y + 1.0) * np.sin(2.5 * z)
+            + np.sin(4.3 * z + 2.1) * np.sin(1.3 * x))
+    v = np.abs(np.sin(1.8 * x + 1.1 * y + 1.6 * turb)) ** 0.4
+    return vein + v[:, None] * (base - vein)
+
+
+# Reflectivity per material id (glass handled separately via Fresnel)
+def _reflectivity_table():
+    return np.array([light_module.MODEL_REFLECTIVITY,
+                     light_module.FLOOR_REFLECTIVITY,
+                     0.0,
+                     light_module.WOOD_REFLECTIVITY,
+                     light_module.MARBLE_REFLECTIVITY])
+
+
 def _floor_colors(points, floor_pattern):
     """Procedural floor colours for view-space points on the floor plane."""
     checker_light = np.asarray(light_module.CHECKER_LIGHT, dtype=np.float64)
@@ -189,6 +258,8 @@ def _floor_colors(points, floor_pattern):
     tile = light_module.CHECKER_TILE
     if floor_pattern == 'plain':
         return np.broadcast_to(checker_light, (len(points), 3)).copy()
+    if floor_pattern == 'mandelbrot':
+        return _mandelbrot_colors(points, checker_dark, checker_light)
     if floor_pattern == 'stripes':
         k = np.floor((points[:, 0] + points[:, 2]) / tile)
     elif floor_pattern == 'rings':
@@ -294,19 +365,31 @@ def trace_rays(ctx, origins, dirs, lt, shadows_on=True, bounces=2,
         # --- Opaque hits: shade + one mirror continuation ----------------
         om = np.nonzero(mat != MAT_GLASS)[0]
         if len(om):
-            is_floor = mat[om] == MAT_FLOOR
+            m_om = mat[om]
+            p_om = p[om]
             base_colors = np.broadcast_to(silver, (len(om), 3)).copy()
-            if is_floor.any():
-                base_colors[is_floor] = _floor_colors(p[om][is_floor],
-                                                      floor_pattern)
+            fl = m_om == MAT_FLOOR
+            if fl.any():
+                base_colors[fl] = _floor_colors(p_om[fl], floor_pattern)
+            # Textured materials sample in OBJECT space so the pattern
+            # sticks to the surface while the model rotates
+            for mid, fn in ((MAT_WOOD, _wood_colors),
+                            (MAT_MARBLE, _marble_colors)):
+                sel = m_om == mid
+                if sel.any():
+                    pts = p_om[sel]
+                    v2o = ctx.get('view_to_object')
+                    if v2o is not None:
+                        pts = pts @ v2o[:3, :3] + v2o[3, :3]
+                    base_colors[sel] = fn(pts)
+
             local = light_module.phong_shade_batch(
-                n[om], p[om], lt, view_dirs=-d_h[om],
+                n[om], p_om, lt, view_dirs=-d_h[om],
                 base_colors=base_colors,
                 light_factor=None if lf is None else lf[om]
             ).astype(np.float64)
 
-            refl = np.where(is_floor, light_module.FLOOR_REFLECTIVITY,
-                            light_module.MODEL_REFLECTIVITY)
+            refl = _reflectivity_table()[m_om]
             if depth >= bounces:
                 refl = np.zeros_like(refl)  # cap keeps all remaining light
 
@@ -397,7 +480,8 @@ BAND_ROWS = 40  # rows traced per band (progressive display granularity)
 
 def render_still(vertices, faces, vertex_normals, face_material,
                  cam, vp, lt, shadows_on=True, bounces=2, report=None,
-                 floor_pattern='checker', progress=None, on_band=None):
+                 floor_pattern='checker', progress=None, on_band=None,
+                 view_to_object=None):
     """Trace the scene to a (pane_width, pane_height, 3) uint8 image.
 
     All geometry in view space (camera at the origin looking +z).
@@ -425,7 +509,7 @@ def render_still(vertices, faces, vertex_normals, face_material,
         opaque_scene = scene
         glass_scene = None
     ctx = {'scene': scene, 'opaque_scene': opaque_scene,
-           'glass_scene': glass_scene}
+           'glass_scene': glass_scene, 'view_to_object': view_to_object}
 
     W, H = vp.width, vp.height
     ppu = cam.pixels_per_unit

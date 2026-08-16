@@ -85,6 +85,14 @@ GLASS_IOR = 1.5                        # index of refraction
 GLASS_TINT = (0.93, 0.97, 0.94)        # per-interface transmission filter
 GLASS_SHADOW_TRANSMISSION = 0.55       # light passing a glass occluder
 
+# Procedural materials (ray tracer only; textured in object space)
+WOOD_LIGHT = (178, 124, 72)
+WOOD_DARK = (92, 56, 28)
+WOOD_REFLECTIVITY = 0.08
+MARBLE_LIGHT = (230, 230, 234)
+MARBLE_VEIN = (96, 104, 122)
+MARBLE_REFLECTIVITY = 0.3
+
 
 def phong_shade_batch(normals, points, light, shadowed=None, view_dirs=None,
                       base_colors=None, light_factor=None,
