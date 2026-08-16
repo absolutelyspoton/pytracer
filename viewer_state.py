@@ -37,6 +37,7 @@ class ViewerState:
         self.draw_axes = True
         self.backface_cull = False  # wireframe-only toggle; other modes always cull
         self.render_mode = 'wireframe'  # cycles: wireframe -> hidden-line -> solid
+        self.show_shadows = True  # floor shadow + still self-shadowing (filled modes)
         self.show_help = False
 
         # Continuous rotation state
@@ -64,6 +65,10 @@ class ViewerState:
     def toggle_backface_cull(self):
         """Toggle backface culling."""
         self.backface_cull = not self.backface_cull
+
+    def toggle_shadows(self):
+        """Toggle shadow rendering (floor shadow + still self-shadowing)."""
+        self.show_shadows = not self.show_shadows
 
     def cycle_render_mode(self):
         """Advance to the next render mode: wireframe -> hidden-line -> solid."""
@@ -162,6 +167,11 @@ class InputHandler:
         elif key == pygame.K_s:
             self.state.cycle_render_mode()
             print(f'render mode: {self.state.render_mode} ...')
+
+        elif key == pygame.K_d:
+            self.state.toggle_shadows()
+            status = 'on' if self.state.show_shadows else 'off'
+            print(f'shadows {status} ...')
 
         elif key == pygame.K_h:
             self.state.toggle_help()

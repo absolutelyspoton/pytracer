@@ -146,13 +146,60 @@ def fill_gouraud(surface, pts, colors, bounds):
             set_at((x_start, y), (int(r), int(g), int(b)))
 
 
-def fill_phong(surface, pts, normals, view_pts, lt, bounds, step=1):
+def fill_depth(depth, pts, depths, size):
+    """Scanline-rasterise a triangle into a 2D depth buffer, keeping the
+    minimum depth per cell. Used to build the shadow map: the light 'sees'
+    the nearest surface along each texel."""
+    (p0, d0), (p1, d1), (p2, d2) = _sorted_by_y(pts, [(depths[0],),
+                                                      (depths[1],),
+                                                      (depths[2],)])
+    last = size - 1
+    y_start = max(int(p0[1] + 0.5), 0)
+    y_end = min(int(p2[1] + 0.5), last)
+    mid_y = p1[1]
+
+    for y in range(y_start, y_end + 1):
+        xl, al = _edge_x_and_attrs(y, p0, d0, p2, d2)
+        if y < mid_y:
+            xr, ar = _edge_x_and_attrs(y, p0, d0, p1, d1)
+        else:
+            xr, ar = _edge_x_and_attrs(y, p1, d1, p2, d2)
+
+        if xl > xr:
+            xl, xr = xr, xl
+            al, ar = ar, al
+
+        x_start = max(int(xl + 0.5), 0)
+        x_end = min(int(xr + 0.5), last)
+        if x_end < x_start:
+            continue
+
+        row = depth[y]
+        d = al[0]
+        span = xr - xl
+        if span >= 1.0:
+            dd = (ar[0] - d) / span
+            off = x_start - xl
+            if off > 0.0:
+                d += dd * off
+            for x in range(x_start, x_end + 1):
+                if d < row[x]:
+                    row[x] = d
+                d += dd
+        else:
+            if d < row[x_start]:
+                row[x_start] = d
+
+
+def fill_phong(surface, pts, normals, view_pts, lt, bounds, step=1,
+               shadow=None):
     """Phong fill: interpolate normals + view positions, light per pixel.
 
     The reflection model is inlined (no per-pixel function calls). With
     step > 1 lighting is evaluated every `step` pixels and held between
     evaluations - used for the fast interactive render; anti-aliased stills
-    use step=1.
+    use step=1. `shadow` is an optional shadow.ShadowMap: shadowed pixels
+    keep ambient light only (self-shadowing in stills).
     """
     attrs = [normals[i] + view_pts[i] for i in range(3)]
     (p0, a0), (p1, a1), (p2, a2) = _sorted_by_y(pts, attrs)
@@ -170,6 +217,13 @@ def fill_phong(surface, pts, normals, view_pts, lt, bounds, step=1):
     ks = light_module.SPECULAR_COEFF * lt.specular
     shininess = light_module.SHININESS
     mr, mg, mb = light_module.MATERIAL_BASE_COLOR
+
+    # Hoist shadow-map fields (consulted once per lighting evaluation)
+    if shadow is not None:
+        s_u, s_v, s_w = shadow.u, shadow.v, shadow.w
+        s_umin, s_vmin = shadow.u_min, shadow.v_min
+        s_su, s_sv = shadow.scale_u, shadow.scale_v
+        s_bias, s_depth, s_last = shadow.bias, shadow.depth, shadow.size - 1
 
     for y in range(y_start, y_end + 1):
         xl, al = _edge_x_and_attrs(y, p0, a0, p2, a2)
@@ -227,7 +281,25 @@ def fill_phong(surface, pts, normals, view_pts, lt, bounds, step=1):
                 n_dot_l = ux * lx + uy * ly + uz * lz
                 base = ka
                 spec = 0.0
-                if n_dot_l > 0.0:
+                lit = n_dot_l > 0.0
+                if lit and shadow is not None:
+                    # Shadow-map test: light-space transform + depth compare
+                    lu = px * s_u[0] + py * s_u[1] + pz * s_u[2]
+                    lv = px * s_v[0] + py * s_v[1] + pz * s_v[2]
+                    lw = px * s_w[0] + py * s_w[1] + pz * s_w[2]
+                    ix = int((lu - s_umin) * s_su)
+                    iy = int((lv - s_vmin) * s_sv)
+                    if ix < 0:
+                        ix = 0
+                    elif ix > s_last:
+                        ix = s_last
+                    if iy < 0:
+                        iy = 0
+                    elif iy > s_last:
+                        iy = s_last
+                    if lw > s_depth[iy][ix] + s_bias:
+                        lit = False
+                if lit:
                     base += kd * n_dot_l
                     rx = 2.0 * n_dot_l * ux - lx
                     ry = 2.0 * n_dot_l * uy - ly

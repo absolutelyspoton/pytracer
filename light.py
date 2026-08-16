@@ -11,11 +11,11 @@
 import matrix
 
 # Material properties (a future material concept can move these onto objects)
-MATERIAL_BASE_COLOR = (198, 120, 54)  # warm copper
+MATERIAL_BASE_COLOR = (190, 193, 200)  # silver/grey
 AMBIENT_COEFF = 0.25   # ka
-DIFFUSE_COEFF = 0.75   # kd
-SPECULAR_COEFF = 0.5   # ks
-SHININESS = 24         # specular exponent
+DIFFUSE_COEFF = 0.6    # kd - metals reflect more specularly than diffusely
+SPECULAR_COEFF = 0.7   # ks
+SHININESS = 40         # specular exponent - tight metallic highlight
 
 
 class Light:
@@ -70,6 +70,15 @@ def phong_intensity(normal, point_view, light):
                 spec = SPECULAR_COEFF * light.specular * (r_dot_v ** SHININESS)
 
     return (min(base, 1.0), min(spec, 1.0))
+
+
+def ambient_shade(light):
+    """Material colour under ambient light only - what a fully shadowed
+    surface receives."""
+    base = min(AMBIENT_COEFF * light.ambient, 1.0)
+    return (min(int(MATERIAL_BASE_COLOR[0] * base), 255),
+            min(int(MATERIAL_BASE_COLOR[1] * base), 255),
+            min(int(MATERIAL_BASE_COLOR[2] * base), 255))
 
 
 def phong_shade(normal, point_view, light):

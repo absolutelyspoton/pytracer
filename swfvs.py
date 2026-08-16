@@ -14,6 +14,7 @@ import viewer_state
 import viewport
 import light
 import raster
+import shadow
 
 INPUT_DATA_SOURCE = 'file'  # 'db' or 'file'
 SCREEN_WIDTH = 1024
@@ -40,6 +41,10 @@ STILL_FRAMES_FOR_HQ = 15
 # Interactive Phong evaluates lighting every Nth pixel (held between) for
 # speed; anti-aliased stills always use per-pixel lighting (step 1).
 PHONG_INTERACTIVE_STEP = 2
+
+# Ground plane (filled modes): a neutral stage the shadows fall on
+FLOOR_BASE_COLOR = (152, 152, 158)
+SHADOW_DARKEN = 0.45  # shadowed floor = floor colour x this factor
 
 # Color constants
 COLOR_BLACK = (0, 0, 0)
@@ -106,6 +111,21 @@ def start():
     hq_image = None    # cached pane-sized anti-aliased still
     still_frames = 0   # consecutive frames with an unchanged view
 
+    # Ground plane geometry (view space): a fixed stage below the model's
+    # reach at any rotation, wide enough that shadows always land on it
+    model_radius = 0.5 * ((max(xs) - min(xs)) ** 2 +
+                          (max(ys) - min(ys)) ** 2 +
+                          (max(zs) - min(zs)) ** 2) ** 0.5
+    floor_y = model_radius * 1.05
+    floor_half = model_radius * 4.0
+
+    def project_view_point(p):
+        """View space -> pane screen coordinates (same camera projection
+        the vertex pipeline applies)."""
+        ppu = state.camera.pixels_per_unit
+        return (vp.center_x + p[0] / p[2] * ppu,
+                vp.center_y + p[1] / p[2] * ppu)
+
     # Rendering resources
     clock = pygame.time.Clock()
     font = pygame.font.Font(None, 36)
@@ -123,6 +143,7 @@ def start():
         'n/v - Toggle vertex normals',
         'f - Toggle faces',
         's - Cycle render: wire/hidden-line/solid/gouraud/phong',
+        'd - Toggle shadows',
         'b - Toggle backface culling (wireframe)',
         'h - Toggle this help',
         'q - Quit'
@@ -227,7 +248,8 @@ def start():
                 # anti-aliased still short-circuits the whole frame build
                 if mode in ('gouraud', 'phong'):
                     view_sig = (tuple(state.rotation), tuple(state.translation),
-                                tuple(state.scale), state.camera.distance, mode)
+                                tuple(state.scale), state.camera.distance, mode,
+                                state.show_shadows)
                     if view_sig != hq_sig:
                         hq_sig = view_sig
                         hq_image = None
@@ -236,6 +258,31 @@ def start():
                         still_frames += 1
                 use_cached_still = (mode in ('gouraud', 'phong')
                                     and hq_image is not None)
+
+                # Ground plane + planar projected shadows (filled modes).
+                # The floor is a stage fixed in view space; each light-facing
+                # model face is projected along the light onto it.
+                draw_floor = mode != 'hidden-line' and not use_cached_still
+                floor_pts = None
+                floor_col = shadow_col = None
+                shadow_polys = []
+                collect_shadows = draw_floor and state.show_shadows
+                if draw_floor:
+                    D = state.camera.distance
+                    zf_near = max(state.camera.near + 0.2, D - floor_half)
+                    zf_far = D + floor_half
+                    floor_pts = tuple(project_view_point(p) for p in
+                                      ((-floor_half, floor_y, zf_near),
+                                       (floor_half, floor_y, zf_near),
+                                       (floor_half, floor_y, zf_far),
+                                       (-floor_half, floor_y, zf_far)))
+                    # Flat-lit floor: ambient + diffuse at its up-facing
+                    # normal (specular omitted - one colour for the quad)
+                    fbase, _ = light.phong_intensity((0.0, -1.0, 0.0),
+                                                     (0.0, floor_y, D),
+                                                     state.light)
+                    floor_col = tuple(int(c * fbase) for c in FLOOR_BASE_COLOR)
+                    shadow_col = tuple(int(c * SHADOW_DARKEN) for c in floor_col)
 
                 # Smooth shading needs per-vertex view-space normals; Gouraud
                 # additionally lights every vertex once, up front
@@ -260,6 +307,25 @@ def start():
                         continue
 
                     n = transformed_normals[face_idx]
+
+                    # Cast a shadow if the face faces the LIGHT (independent
+                    # of whether the camera sees it)
+                    if collect_shadows:
+                        tl = state.light.to_light
+                        if n[0] * tl[0] + n[1] * tl[1] + n[2] * tl[2] > 0:
+                            sp = []
+                            for pv in ((va.x_view, va.y_view, va.z_view),
+                                       (vb.x_view, vb.y_view, vb.z_view),
+                                       (vc.x_view, vc.y_view, vc.z_view)):
+                                q = shadow.project_to_floor(pv, state.light,
+                                                            floor_y)
+                                if q is None or q[2] <= state.camera.near:
+                                    sp = None
+                                    break
+                                sp.append(project_view_point(q))
+                            if sp:
+                                shadow_polys.append(sp)
+
                     cx = (va.x_view + vb.x_view + vc.x_view) / 3.0
                     cy = (va.y_view + vb.y_view + vc.y_view) / 3.0
                     cz = (va.z_view + vb.z_view + vc.z_view) / 3.0
@@ -277,8 +343,7 @@ def start():
                         # Flat shading: one lighting evaluation per face
                         payload = light.phong_shade(n, (cx, cy, cz), state.light)
                     elif mode == 'gouraud':
-                        payload = (vertex_colors[i1], vertex_colors[i2],
-                                   vertex_colors[i3])
+                        payload = (i1, i2, i3)  # colours resolved at draw time
                     else:  # phong
                         payload = ((view_normals[i1], view_normals[i2],
                                     view_normals[i3]),
@@ -302,13 +367,21 @@ def start():
                         buf = solid_buffer
                         buf.fill(COLOR_WHITE)
                         ss = SOLID_SSAA
+                        to_buf = lambda p: ((p[0] - vp.x) * ss, (p[1] - vp.y) * ss)
+                        pygame.draw.polygon(buf, floor_col,
+                                            [to_buf(p) for p in floor_pts], 0)
+                        for sp in shadow_polys:
+                            pygame.draw.polygon(buf, shadow_col,
+                                                [to_buf(p) for p in sp], 0)
                         for depth, colr, pts in render_list:
-                            bpts = tuple(((p[0] - vp.x) * ss, (p[1] - vp.y) * ss)
-                                         for p in pts)
-                            pygame.draw.polygon(buf, colr, bpts, 0)
+                            pygame.draw.polygon(buf, colr,
+                                                [to_buf(p) for p in pts], 0)
                         screen.blit(pygame.transform.smoothscale(
                             buf, (vp.width, vp.height)), (vp.x, vp.y))
                     else:
+                        pygame.draw.polygon(screen, floor_col, floor_pts, 0)
+                        for sp in shadow_polys:
+                            pygame.draw.polygon(screen, shadow_col, sp, 0)
                         for depth, colr, pts in render_list:
                             pygame.draw.polygon(screen, colr, pts, 0)
                 else:
@@ -333,22 +406,52 @@ def start():
                         buf.fill(COLOR_WHITE)
                         bounds = (0, 0, buf.get_width() - 1, buf.get_height() - 1)
 
+                        # Floor + planar shadows first (they are always
+                        # behind/below the model)
+                        to_buf = lambda p: ((p[0] - vp.x) * pt_scale,
+                                            (p[1] - vp.y) * pt_scale)
+                        pygame.draw.polygon(buf, floor_col,
+                                            [to_buf(p) for p in floor_pts], 0)
+                        for sp in shadow_polys:
+                            pygame.draw.polygon(buf, shadow_col,
+                                                [to_buf(p) for p in sp], 0)
+
+                        # Self-shadowing (shadow map) for the HQ still only
+                        shadow_map = None
+                        if buf is hq_buffer and state.show_shadows:
+                            view_points = [(vtx.x_view, vtx.y_view, vtx.z_view)
+                                           for vtx in vlist]
+                            face_triples = [(f.vertex_list[0] - 1,
+                                             f.vertex_list[1] - 1,
+                                             f.vertex_list[2] - 1)
+                                            for f in surfaces.surface_list]
+                            shadow_map = shadow.build_shadow_map(
+                                view_points, face_triples, state.light)
+
                         if mode == 'gouraud':
-                            for depth, colors, pts in render_list:
-                                bpts = tuple(((p[0] - vp.x) * pt_scale,
-                                              (p[1] - vp.y) * pt_scale)
-                                             for p in pts)
-                                raster.fill_gouraud(buf, bpts, colors, bounds)
+                            if shadow_map is not None:
+                                # Re-light shadowed vertices with ambient only
+                                amb = light.ambient_shade(state.light)
+                                vertex_colors = [
+                                    amb if shadow_map.is_shadowed(
+                                        (vtx.x_view, vtx.y_view, vtx.z_view))
+                                    else vertex_colors[i]
+                                    for i, vtx in enumerate(vlist)]
+                            for depth, (i1, i2, i3), pts in render_list:
+                                bpts = tuple(to_buf(p) for p in pts)
+                                raster.fill_gouraud(
+                                    buf, bpts,
+                                    (vertex_colors[i1], vertex_colors[i2],
+                                     vertex_colors[i3]), bounds)
                         else:  # phong
                             phong_step = (1 if buf is hq_buffer
                                           else PHONG_INTERACTIVE_STEP)
                             for depth, (normals, view_pts), pts in render_list:
-                                bpts = tuple(((p[0] - vp.x) * pt_scale,
-                                              (p[1] - vp.y) * pt_scale)
-                                             for p in pts)
+                                bpts = tuple(to_buf(p) for p in pts)
                                 raster.fill_phong(buf, bpts, normals, view_pts,
                                                   state.light, bounds,
-                                                  step=phong_step)
+                                                  step=phong_step,
+                                                  shadow=shadow_map)
 
                         scaled = pygame.transform.smoothscale(
                             buf, (vp.width, vp.height))

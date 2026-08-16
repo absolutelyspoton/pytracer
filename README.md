@@ -16,6 +16,7 @@ GUI Commands
 |n|v           |Toggle display of vertex normals               |
 |f             |Toggle display of surfaces (polygons)          |
 |s             |Cycle render mode: wireframe / hidden-line / solid / gouraud / phong |
+|d             |Toggle shadows (floor shadow; self-shadowing in stills) |
 |b             |Toggle backface culling (wireframe mode)       |
 |h             |Toggle help overlay                            |
 |q             |Quit                                           |
@@ -35,6 +36,6 @@ Feature History
 |0.9           |Single light source (Phong reflection model: ambient/diffuse/specular)  |
 |1.0           |Phong Shading (per-pixel normal interpolation, scanline rasteriser)      |
 |1.1           |Gauraud Shading (per-vertex lighting, colour interpolation)              |
-|1.2 (todo)    |Shadows                                                                  |
+|1.2           |Shadows (planar projected on ground plane; shadow-mapped self-shadowing) |
 |1.3 (todo)    |Multiple light source                                                    |
 
