@@ -10,11 +10,7 @@ VECTOR_SIZE = 4 # 4x4 Matrices
 # Return zero matrix
 # [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
 def ZeroMatrix():
-    arr = [[0 for i in range(VECTOR_SIZE)] for j in range(VECTOR_SIZE) ]
-    for i in range(VECTOR_SIZE):
-        for j in range(VECTOR_SIZE):
-            arr[i][j] = 0
-    return arr  
+    return [[0 for i in range(VECTOR_SIZE)] for j in range(VECTOR_SIZE)]  
 
 # Return identity matrix
 # [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]
