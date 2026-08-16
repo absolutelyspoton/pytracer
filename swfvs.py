@@ -92,6 +92,11 @@ def start():
     screen = pygame.display.set_mode(size)
     screen.fill(white)
 
+    clock = pygame.time.Clock()
+    font = pygame.font.Font(None, 36)
+    fps_update_timer = 0
+    fps_text = font.render('FPS: 0.0', True, black)
+
     drawnormals = False
     normals_calculated = False
     drawfaces = True
@@ -275,7 +280,16 @@ def start():
             pygame.draw.line(screen,blue,[0+x_translation,0+y_translation],[0+x_translation,200+y_translation],3) # type: ignore
             pygame.draw.line(screen,magenta,[0+x_translation,0+y_translation],[175+x_translation,175+y_translation],3) # type: ignore
 
+        fps_update_timer += 1
+        if fps_update_timer >= 10:
+            current_fps = clock.get_fps()
+            fps_text = font.render(f'FPS: {current_fps:.1f}', True, black)
+            fps_update_timer = 0
+
+        screen.blit(fps_text, (10, 10))
+
         pygame.display.flip()
+        clock.tick(60)
         screen.fill(white)
 
 if __name__ == '__main__':
