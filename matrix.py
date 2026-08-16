@@ -10,11 +10,7 @@ VECTOR_SIZE = 4 # 4x4 Matrices
 # Return zero matrix
 # [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
 def ZeroMatrix():
-    arr = [[0 for i in range(VECTOR_SIZE)] for j in range(VECTOR_SIZE) ]
-    for i in range(VECTOR_SIZE):
-        for j in range(VECTOR_SIZE):
-            arr[i][j] = 0
-    return arr  
+    return [[0 for i in range(VECTOR_SIZE)] for j in range(VECTOR_SIZE)]  
 
 # Return identity matrix
 # [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]
@@ -39,7 +35,7 @@ def MatrixVector(m,v):
     x = m[0][0] * v[0] + m[1][0] * v[1] + m[2][0] * v[2] + m[3][0]
     y = m[0][1] * v[0] + m[1][1] * v[1] + m[2][1] * v[2] + m[3][1]
     z = m[0][2] * v[0] + m[1][2] * v[1] + m[2][2] * v[2] + m[3][2]
-    return ([x,y,z])
+    return (x, y, z)
 
 # Matrix maths to rotate through x,y,z axis
 def RotateMatrix(x_theta,y_theta,z_theta):
@@ -104,35 +100,28 @@ def VectorMagnitude(v) ->float:
     return math.sqrt((v[0]*v[0])+(v[1]*v[1])+(v[2]*v[2]))
     
 def NormaliseVector(v):
-    r = [0,0,0]
     denom = VectorMagnitude(v)
 
-    if denom == 0.0:
-        r[0] = v[0]
-        r[1] = v[1]
-        r[2] = v[2]
+    if abs(denom) < 1e-9:
+        return (v[0], v[1], v[2])
     else:
         t = 1.0 / denom
-        r[0] = v[0]*t
-        r[1] = v[1]*t
-        r[2] = v[2]*t
-    return r
+        return (v[0]*t, v[1]*t, v[2]*t)
 
 def DotProduct(v1,v2):
     return ( (v1[0]*v2[0]) + (v1[1]*v2[1]) + (v1[2]*v2[2]) )
 
 def CalcSurfaceNormal(v1,v2,v3):
-        
-    # First calculate colinnear vectors
-    a = [v2[0]-v1[0],v2[1]-v1[1],v2[2]-v1[2]]
-    b = [v3[0]-v2[0],v3[1]-v2[1],v3[2]-v2[2]]
+    # Calculate collinear vectors
+    a_x, a_y, a_z = v2[0]-v1[0], v2[1]-v1[1], v2[2]-v1[2]
+    b_x, b_y, b_z = v3[0]-v2[0], v3[1]-v2[1], v3[2]-v2[2]
 
     # Calculate the normal and return it
-    x = a[1] * b[2] - a[2] * b[1]
-    y = a[2] * b[0] - a[0] * b[2]
-    z = a[0] * b[1] - a[1] * b[0]
+    x = a_y * b_z - a_z * b_y
+    y = a_z * b_x - a_x * b_z
+    z = a_x * b_y - a_y * b_x
 
-    return [x,y,z]
+    return (x, y, z)
 
 def PrintMatrix(m):
     for n in m:
