@@ -101,6 +101,7 @@ def start():
     normals_calculated = False
     drawfaces = True
     drawaxes = True
+    backface_cull = False
 
     while 1:
 
@@ -205,7 +206,16 @@ def start():
                     else:
                         drawfaces = True
                         print('draw faces on ...')
-                
+
+                if event.key == pygame.K_b:
+
+                    if backface_cull:
+                        backface_cull = False
+                        print('backface culling off ...')
+                    else:
+                        backface_cull = True
+                        print('backface culling on ...')
+
                 screen.fill(white)
 
         # Calc linear transforms for scaling, rotation and TODO: translation
@@ -235,13 +245,13 @@ def start():
                 # Surface normals are pre-computed at load time and cached in face.normal
                 # (no per-frame recalculation needed)
 
-                # Backface culling: transform normal to view space and check if pointing toward camera
-                # Normal must be rotated (but not translated or scaled) by the rotation matrix only
-                normal_view = matrix.MatrixVector(MR, face.normal)
-
-                # Skip faces pointing away from camera (normal.z < 0 in view space)
-                if normal_view[2] < 0:
-                    continue
+                # Backface culling (optional, can be toggled with 'b' key)
+                # Note: Simple face-normal-based culling works for convex meshes but may miss
+                # surfaces on complex geometry like the teapot handle/spout
+                if backface_cull:
+                    normal_view = matrix.MatrixVector(MR, face.normal)
+                    if normal_view[2] < 0:
+                        continue
 
                 # view plane transformation (basic TODO: add wiew point and proper perspective view plane transform )
                 # i.e. convert 3 dimensional coordinate onto 2 dimensional view plane ( impl parralel and perspective )
