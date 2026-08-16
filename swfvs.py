@@ -235,9 +235,13 @@ def start():
                 # Surface normals are pre-computed at load time and cached in face.normal
                 # (no per-frame recalculation needed)
 
-                # Backface culling: skip faces pointing away from camera
-                # Camera is at origin looking down +Z, so cull if normal.z < 0
-                if face.normal[2] < 0:
+                # Backface culling: transform normal to view space and check if pointing toward camera
+                # Normal must be rotated (but not translated or scaled) by the rotation matrix only
+                MR = matrix.RotateMatrix(x_rotation, y_rotation, z_rotation)
+                normal_view = matrix.MatrixVector(MR, face.normal)
+
+                # Skip faces pointing away from camera (normal.z < 0 in view space)
+                if normal_view[2] < 0:
                     continue
 
                 # view plane transformation (basic TODO: add wiew point and proper perspective view plane transform )
