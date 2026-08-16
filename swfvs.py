@@ -132,17 +132,22 @@ def start():
             vertex.calc_view_coordinates(M)
             vertex.calc_screen_coordinates(MP)
 
+        # Cache transformed normals for culling (computed once, used twice)
+        transformed_normals = {}
+        if state.backface_cull:
+            for idx, face in enumerate(surfaces.surface_list):
+                transformed_normals[idx] = matrix.MatrixVector(MR, face.normal)
+
         # Draw faces
         if state.draw_faces:
-            for face in surfaces.surface_list:
+            for face_idx, face in enumerate(surfaces.surface_list):
                 v1_idx = face.vertex_list[0] - 1
                 v2_idx = face.vertex_list[1] - 1
                 v3_idx = face.vertex_list[2] - 1
 
-                # Backface culling (optional)
+                # Backface culling (optional) - use cached normal
                 if state.backface_cull:
-                    normal_view = matrix.MatrixVector(MR, face.normal)
-                    if normal_view[2] < 0:
+                    if transformed_normals[face_idx][2] < 0:
                         continue
 
                 # Draw triangle
@@ -179,11 +184,10 @@ def start():
             displayed_edges = 0
 
             if state.draw_faces:
-                for face in surfaces.surface_list:
-                    # Apply backface culling logic
+                for face_idx, face in enumerate(surfaces.surface_list):
+                    # Apply backface culling logic - use cached normal
                     if state.backface_cull:
-                        normal_view = matrix.MatrixVector(MR, face.normal)
-                        if normal_view[2] < 0:
+                        if transformed_normals[face_idx][2] < 0:
                             continue
                     displayed_faces += 1
                     displayed_edges += 3  # Each triangle has 3 edges
