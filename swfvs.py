@@ -102,6 +102,22 @@ def start():
     drawfaces = True
     drawaxes = True
     backface_cull = False
+    show_help = False
+
+    help_text = [
+        'KEYBOARD CONTROLS:',
+        'c - Center/reset view',
+        'Arrow keys - Pan up/down/left/right',
+        '+/- - Zoom in/out',
+        'x/y/z - Spin on X/Y/Z axis',
+        'a - Toggle axis legend',
+        'n/v - Toggle vertex normals',
+        'f - Toggle wireframe faces',
+        'b - Toggle backface culling',
+        'h - Toggle this help',
+        'q - Quit'
+    ]
+    help_font = pygame.font.Font(None, 28)
 
     while 1:
 
@@ -216,6 +232,14 @@ def start():
                         backface_cull = True
                         print('backface culling on ...')
 
+                if event.key == pygame.K_h:
+
+                    show_help = not show_help
+                    if show_help:
+                        print('help on ...')
+                    else:
+                        print('help off ...')
+
                 screen.fill(white)
 
         # Calc linear transforms for scaling, rotation and TODO: translation
@@ -287,6 +311,13 @@ def start():
             fps_update_timer = 0
 
         screen.blit(fps_text, (10, 10))
+
+        if show_help:
+            help_y = 60
+            for line in help_text:
+                help_surface = help_font.render(line, True, black)
+                screen.blit(help_surface, (10, help_y))
+                help_y += 30
 
         pygame.display.flip()
         clock.tick(60)
