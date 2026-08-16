@@ -168,11 +168,27 @@ def start():
             pygame.draw.line(screen, COLOR_BLUE, [tx, ty], [tx, ty + 200], 3)
             pygame.draw.line(screen, COLOR_MAGENTA, [tx, ty], [tx + 175, ty + 175], 3)
 
-        # Draw FPS counter
+        # Draw FPS counter and status
         fps_update_timer += 1
         if fps_update_timer >= 10:
             current_fps = clock.get_fps()
-            fps_text = font.render(f'FPS: {current_fps:.1f}', True, COLOR_BLACK)
+
+            # Build status string
+            faces_status = 'F' if state.draw_faces else '-'
+            normals_status = 'N' if state.draw_normals else '-'
+            axes_status = 'A' if state.draw_axes else '-'
+            cull_status = 'C' if state.backface_cull else '-'
+
+            vertex_count = vertices.vertex_count()
+            face_count = surfaces.surface_count()
+
+            status_line = (
+                f'FPS: {current_fps:.1f}  |  '
+                f'Faces:{faces_status} Normals:{normals_status} Axes:{axes_status} Cull:{cull_status}  |  '
+                f'V:{vertex_count} F:{face_count}'
+            )
+
+            fps_text = font.render(status_line, True, COLOR_BLACK)
             fps_update_timer = 0
 
         screen.blit(fps_text, (10, 10))
