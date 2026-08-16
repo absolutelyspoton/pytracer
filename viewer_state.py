@@ -6,6 +6,7 @@
 
 import pygame
 import math
+import camera
 
 class ViewerState:
     """Encapsulates all viewer transformation and display state."""
@@ -13,20 +14,26 @@ class ViewerState:
     # Configuration constants
     SCALE_MULTIPLIER = 1.1
     ROTATION_INCREMENT_DEG = 25
-    TRANSLATION_INCREMENT = 15.0
+    TRANSLATION_INCREMENT = 0.25  # world units (model is ~3.5 units in radius)
+    DOLLY_MULTIPLIER = 1.1
+    RENDER_MODES = ['wireframe', 'hidden-line', 'solid']
 
     def __init__(self, screen_width, screen_height):
-        # Transformations
-        self.scale = [100.0, 100.0, 100.0]
+        # Model transformations (world units; the model loads at its raw size)
+        self.scale = [1.0, 1.0, 1.0]
         self.rotation = [180.0, 180.0, 0.0]
-        self.translation = [screen_width / 2, screen_height / 2, 0]
+        self.translation = [0.0, 0.0, 0.0]
+
+        # Camera (view transform + perspective projection)
+        self.camera = camera.Camera()
 
         # Display flags
         self.draw_normals = False
         self.normals_calculated = False
         self.draw_faces = True
         self.draw_axes = True
-        self.backface_cull = False  # Disabled by default (costs 4.9 FPS, wireframe shows both sides)
+        self.backface_cull = False  # wireframe-only toggle; other modes always cull
+        self.render_mode = 'wireframe'  # cycles: wireframe -> hidden-line -> solid
         self.show_help = False
 
         # Continuous rotation state
@@ -34,10 +41,10 @@ class ViewerState:
 
     def reset(self):
         """Reset to initial state (equivalent to pressing 'c')."""
-        self.scale = [100.0, 100.0, 100.0]
+        self.scale = [1.0, 1.0, 1.0]
         self.rotation = [180.0, 180.0, 0.0]
-        self.translation[0] = self.translation[0]  # keep screen center
-        self.translation[1] = self.translation[1]
+        self.translation = [0.0, 0.0, 0.0]
+        self.camera.reset()
 
     def toggle_normals(self):
         """Toggle vertex normals display."""
@@ -54,6 +61,11 @@ class ViewerState:
     def toggle_backface_cull(self):
         """Toggle backface culling."""
         self.backface_cull = not self.backface_cull
+
+    def cycle_render_mode(self):
+        """Advance to the next render mode: wireframe -> hidden-line -> solid."""
+        i = self.RENDER_MODES.index(self.render_mode)
+        self.render_mode = self.RENDER_MODES[(i + 1) % len(self.RENDER_MODES)]
 
     def toggle_help(self):
         """Toggle help overlay."""
@@ -96,10 +108,12 @@ class InputHandler:
             print('center ...')
 
         elif key == pygame.K_MINUS:
-            self.state.scale_zoom(1.0 / self.state.SCALE_MULTIPLIER)
+            # Dolly the camera away from the object (zoom out)
+            self.state.camera.dolly(self.state.DOLLY_MULTIPLIER)
 
         elif key == pygame.K_EQUALS:
-            self.state.scale_zoom(self.state.SCALE_MULTIPLIER)
+            # Dolly the camera toward the object (zoom in)
+            self.state.camera.dolly(1.0 / self.state.DOLLY_MULTIPLIER)
 
         elif key == pygame.K_x:
             self.state.toggle_rotation(0)
@@ -141,6 +155,10 @@ class InputHandler:
             self.state.toggle_backface_cull()
             status = 'on' if self.state.backface_cull else 'off'
             print(f'backface culling {status} ...')
+
+        elif key == pygame.K_s:
+            self.state.cycle_render_mode()
+            print(f'render mode: {self.state.render_mode} ...')
 
         elif key == pygame.K_h:
             self.state.toggle_help()

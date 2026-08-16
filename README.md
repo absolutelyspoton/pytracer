@@ -8,13 +8,17 @@ GUI Commands
 
 |Key           |Description                                    |
 |--------------|-----------------------------------------------|
-|C             |Centre drawing / Reset                         |
+|C             |Centre drawing / Reset (camera + transforms)   |
 |Arrow Keys    |Shift Up/Down/Left/Right                       |
-|+|-           |Zoom In/Out                                    |
+|+|-           |Dolly camera in/out                            |
 |x|y|z         |Spin object through X-Axis, Y-Axis, Z-Axis     |
 |a             |Display X/Y/Z Axis Legend                      |
-|n             |Toggle display of vertex normals               |
+|n|v           |Toggle display of vertex normals               |
 |f             |Toggle display of surfaces (polygons)          |
+|s             |Cycle render mode: wireframe / hidden-line / solid |
+|b             |Toggle backface culling (wireframe mode)       |
+|h             |Toggle help overlay                            |
+|q             |Quit                                           |
 
 Feature History
 
@@ -26,8 +30,8 @@ Feature History
 |0.4           |Test cases, and test harness (pytest)                                    |
 |0.5           |3d to 2d View Transforms - Perspective & parallel projection             |
 |0.6           |Loader supports files, MongoDB direct, and API to Mongo                  |
-|0.7 (todo)    |View planes and view perspective points                                  |
-|0.8 (todo)    |Backplane culling & X/Y/Z axis visualisation                             |
+|0.7           |View plane & perspective camera (dolly, near-plane clipping, viewport)   |
+|0.8           |Backface culling & hidden-surface removal (painter's algorithm)          |
 |0.9 (todo)    |Single light source                                                      |
 |1.0 (todo)    |Phong Shading                                                            |
 |1.1 (todo)    |Gauraud Shading                                                          |

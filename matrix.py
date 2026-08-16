@@ -37,6 +37,16 @@ def MatrixVector(m,v):
     z = m[0][2] * v[0] + m[1][2] * v[1] + m[2][2] * v[2] + m[3][2]
     return (x, y, z)
 
+# Homogeneous variant: also computes the w component (column 3), needed for
+# the perspective divide. MatrixVector above drops w and stays the fast path
+# for affine transforms.
+def MatrixVectorH(m,v):
+    x = m[0][0] * v[0] + m[1][0] * v[1] + m[2][0] * v[2] + m[3][0]
+    y = m[0][1] * v[0] + m[1][1] * v[1] + m[2][1] * v[2] + m[3][1]
+    z = m[0][2] * v[0] + m[1][2] * v[1] + m[2][2] * v[2] + m[3][2]
+    w = m[0][3] * v[0] + m[1][3] * v[1] + m[2][3] * v[2] + m[3][3]
+    return (x, y, z, w)
+
 # Matrix maths to rotate through x,y,z axis
 def RotateMatrix(x_theta,y_theta,z_theta):
 
@@ -85,9 +95,12 @@ def TranslateMatrix(x,y,z):
     m[3][3] = 1
     return(m)
 
-def PerspectiveMatrix():
+# Perspective projection for row vectors: w = z / focal_distance, so after the
+# homogeneous divide x' = x * focal_distance / z (points shrink with distance).
+# Use with MatrixVectorH; MatrixVector ignores column 3 and cannot apply this.
+def PerspectiveMatrix(focal_distance=10.0):
     m = IdentityMatrix()
-    m[2][3] = 0.1  # type: ignore
+    m[2][3] = 1.0 / focal_distance  # type: ignore
     m[3][3] = 0
     return(m)
 
