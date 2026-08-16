@@ -165,30 +165,11 @@ def _hit_normals(scene, hit, dirs):
     return n
 
 
-def render_still(vertices, faces, vertex_normals, face_is_floor,
-                 cam, vp, lt, shadows_on=True, bounces=2, report=None,
-                 floor_pattern='checker', progress=None):
-    """Trace the scene to a (pane_width, pane_height, 3) uint8 image.
-
-    All geometry in view space (camera at the origin looking +z).
-    floor_pattern: 'checker' | 'stripes' | 'rings' | 'plain'.
-    `progress`, if given, receives an overall 0..1 fraction as the trace
-    advances (weighted per bounce stage - approximate, for a bar).
-    """
-    scene = Scene(vertices, faces, vertex_normals, face_is_floor)
-    W, H = vp.width, vp.height
-    ppu = cam.pixels_per_unit
-
-    # Primary rays through the view plane (pinhole at the origin)
-    px, py = np.meshgrid(np.arange(W) + 0.5, np.arange(H) + 0.5,
-                         indexing='ij')
-    dirs = np.stack([(px.ravel() - W / 2.0) / ppu,
-                     (py.ravel() - H / 2.0) / ppu,
-                     np.ones(W * H)], axis=1)
-    dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
-    origins = np.zeros_like(dirs)
-
-    R = W * H
+def trace_rays(scene, origins, dirs, lt, shadows_on=True, bounces=2,
+               floor_pattern='checker', progress=None, stats=None):
+    """Trace a batch of rays to completion (all bounces). Returns (R, 3)
+    float colours. `progress` maps 0..1 over this batch's work."""
+    R = len(dirs)
     accum = np.zeros((R, 3))
     throughput = np.ones(R)
     active = np.arange(R)
@@ -201,7 +182,6 @@ def render_still(vertices, faces, vertex_normals, face_is_floor,
     # Sky gradient for rays that miss: pale at the horizon, blue overhead
     sky_horizon = np.array([245.0, 247.0, 252.0])
     sky_top = np.array([120.0, 160.0, 220.0])
-    stats = []
 
     def sky_color(directions):
         up = np.clip(-directions[:, 1], 0.0, 1.0)  # view-space y grows down
@@ -225,8 +205,9 @@ def render_still(vertices, faces, vertex_normals, face_is_floor,
             break
         hit = intersect(scene, origins, dirs,
                         progress=stage_progress(bounce, 0.0, 0.7))
-        stats.append(f'bounce {bounce}: {len(active)} rays, '
-                     f'{int((hit["face"] >= 0).sum())} hits')
+        if stats is not None:
+            stats[bounce]['rays'] += len(active)
+            stats[bounce]['hits'] += int((hit['face'] >= 0).sum())
 
         missed = hit['face'] < 0
         accum[active[missed]] += (throughput[active[missed], None]
@@ -292,9 +273,65 @@ def render_still(vertices, faces, vertex_normals, face_is_floor,
 
     if progress is not None:
         progress(1.0)
+    return accum
+
+
+BAND_ROWS = 40  # rows traced per band (progressive display granularity)
+
+
+def render_still(vertices, faces, vertex_normals, face_is_floor,
+                 cam, vp, lt, shadows_on=True, bounces=2, report=None,
+                 floor_pattern='checker', progress=None, on_band=None):
+    """Trace the scene to a (pane_width, pane_height, 3) uint8 image.
+
+    All geometry in view space (camera at the origin looking +z).
+    floor_pattern: 'checker' | 'stripes' | 'rings' | 'plain'.
+
+    The image is traced in horizontal bands of BAND_ROWS so callers can
+    show it painting in: `on_band(y0, y1, band_img)` receives each finished
+    (W, y1-y0, 3) uint8 slice. `progress` receives an overall 0..1
+    fraction as the trace advances.
+    """
+    scene = Scene(vertices, faces, vertex_normals, face_is_floor)
+    W, H = vp.width, vp.height
+    ppu = cam.pixels_per_unit
+    img = np.zeros((W, H, 3), dtype=np.uint8)
+
+    n_bands = (H + BAND_ROWS - 1) // BAND_ROWS
+    stats = [{'rays': 0, 'hits': 0} for _ in range(bounces + 1)]
+
+    for b in range(n_bands):
+        y0 = b * BAND_ROWS
+        y1 = min(y0 + BAND_ROWS, H)
+
+        # Primary rays for this band of rows (pinhole at the origin)
+        px, py = np.meshgrid(np.arange(W) + 0.5, np.arange(y0, y1) + 0.5,
+                             indexing='ij')
+        dirs = np.stack([(px.ravel() - W / 2.0) / ppu,
+                         (py.ravel() - H / 2.0) / ppu,
+                         np.ones(px.size)], axis=1)
+        dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
+        origins = np.zeros_like(dirs)
+
+        band_progress = None
+        if progress is not None:
+            band_progress = (lambda base: lambda f:
+                             progress((base + f) / n_bands))(b)
+
+        colors = trace_rays(scene, origins, dirs, lt, shadows_on=shadows_on,
+                            bounces=bounces, floor_pattern=floor_pattern,
+                            progress=band_progress, stats=stats)
+        band = colors.reshape(W, y1 - y0, 3).clip(0, 255).astype(np.uint8)
+        img[:, y0:y1] = band
+        if on_band is not None:
+            on_band(y0, y1, band)
+
+    if progress is not None:
+        progress(1.0)
     if report:
-        report('; '.join(stats))
-    return accum.reshape(W, H, 3).clip(0, 255).astype(np.uint8)
+        report('; '.join(f"bounce {i}: {s['rays']} rays, {s['hits']} hits"
+                         for i, s in enumerate(stats) if s['rays']))
+    return img
 
 
 if __name__ == '__main__':

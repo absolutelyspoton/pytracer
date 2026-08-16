@@ -262,29 +262,56 @@ def start():
                     print('ray tracing still ...')
                     rt_t0 = time.perf_counter()
 
-                    # On-screen progress bar; flip + pump keep the window
-                    # responsive during the blocking trace
-                    bar_last = [-10]
+                    # Progress bar in the strip BELOW the viewport pane, so
+                    # band painting inside the pane never erases it. Redrawn
+                    # on every flip; flip + pump keep the window responsive.
+                    bar_frac = [0.0]
+                    bar_last_pct = [-10]
 
-                    def trace_progress(frac):
-                        pct = int(frac * 100)
-                        if pct - bar_last[0] < 2 and frac < 1.0:
-                            return
-                        bar_last[0] = pct
-                        bar_w = vp.width - 40
-                        x0 = vp.x + 20
-                        y0 = vp.y + vp.height - 40
+                    def draw_trace_bar():
+                        # Clip is set to the pane during the filled branch;
+                        # lift it to draw below the pane
+                        old_clip = screen.get_clip()
+                        screen.set_clip(None)
+                        bar_w = vp.width
+                        x0 = vp.x
+                        y0 = vp.y + vp.height + 18
+                        pct = int(bar_frac[0] * 100)
                         pygame.draw.rect(screen, COLOR_WHITE,
-                                         pygame.Rect(x0, y0 - 30, bar_w, 48))
+                                         pygame.Rect(x0, y0, bar_w, 46))
                         pygame.draw.rect(screen, (70, 70, 70),
                                          pygame.Rect(x0, y0, bar_w, 16))
                         pygame.draw.rect(screen, (90, 170, 90),
                                          pygame.Rect(x0 + 2, y0 + 2,
-                                                     int((bar_w - 4) * frac),
-                                                     12))
+                                                     int((bar_w - 4)
+                                                         * bar_frac[0]), 12))
                         screen.blit(help_font.render(
                             f'ray tracing {pct}%', True, COLOR_BLACK),
-                            (x0, y0 - 26))
+                            (x0, y0 + 22))
+                        screen.set_clip(old_clip)
+
+                    def trace_progress(frac):
+                        bar_frac[0] = frac
+                        pct = int(frac * 100)
+                        if pct - bar_last_pct[0] < 2 and frac < 1.0:
+                            return
+                        bar_last_pct[0] = pct
+                        draw_trace_bar()
+                        pygame.display.flip()
+                        pygame.event.pump()
+
+                    # Progressive display: paint each finished band so the
+                    # image sweeps in from the top while tracing
+                    progressive = pygame.Surface((vp.width, vp.height))
+                    progressive.fill(COLOR_WHITE)
+
+                    def on_band(y0, y1, band):
+                        band_surf = pygame.Surface(
+                            (band.shape[0], band.shape[1]))
+                        pygame.surfarray.blit_array(band_surf, band)
+                        progressive.blit(band_surf, (0, y0))
+                        screen.blit(progressive, (vp.x, vp.y))
+                        draw_trace_bar()
                         pygame.display.flip()
                         pygame.event.pump()
 
@@ -293,7 +320,7 @@ def start():
                         face_is_floor, state.camera, vp, state.light,
                         shadows_on=state.show_shadows, report=print,
                         floor_pattern=state.floor_pattern,
-                        progress=trace_progress)
+                        progress=trace_progress, on_band=on_band)
                     print(f'... done in {time.perf_counter() - rt_t0:.1f}s')
                     pane = pygame.Surface((vp.width, vp.height))
                     pygame.surfarray.blit_array(pane, img)
