@@ -127,6 +127,173 @@ def make_torus(major=2.2, minor=1.0, seg_u=48, seg_v=24):
     return Mesh(verts, faces)
 
 
+def merge_meshes(meshes):
+    """Concatenate meshes into one (face indices offset per part)."""
+    verts = []
+    faces = []
+    offset = 0
+    for m in meshes:
+        verts.append(m.vertices)
+        faces.append(m.faces + offset)
+        offset += len(m.vertices)
+    return Mesh(np.vstack(verts), np.vstack(faces))
+
+
+def make_uv_sphere(center, radius, seg_u=24, seg_v=14):
+    """Lat-long sphere with true pole vertices."""
+    cx, cy, cz = center
+    verts = [(cx, cy + radius, cz)]           # north pole
+    for i in range(1, seg_v):
+        theta = np.pi * i / seg_v
+        for j in range(seg_u):
+            phi = 2.0 * np.pi * j / seg_u
+            verts.append((cx + radius * np.sin(theta) * np.cos(phi),
+                          cy + radius * np.cos(theta),
+                          cz + radius * np.sin(theta) * np.sin(phi)))
+    verts.append((cx, cy - radius, cz))       # south pole
+    south = len(verts) - 1
+
+    def ring(i, j):
+        return 1 + (i - 1) * seg_u + (j % seg_u)
+
+    faces = []
+    for j in range(seg_u):                    # pole caps
+        faces.append((0, ring(1, j + 1), ring(1, j)))
+        faces.append((south, ring(seg_v - 1, j), ring(seg_v - 1, j + 1)))
+    for i in range(1, seg_v - 1):             # bands
+        for j in range(seg_u):
+            a, b = ring(i, j), ring(i, j + 1)
+            c, d = ring(i + 1, j), ring(i + 1, j + 1)
+            faces.append((a, b, d))
+            faces.append((a, d, c))
+    return Mesh(verts, faces)
+
+
+def make_tube(p0, p1, r0, r1, segs=20):
+    """Capped tube/frustum from p0 (radius r0) to p1 (radius r1)."""
+    p0 = np.asarray(p0, dtype=np.float64)
+    p1 = np.asarray(p1, dtype=np.float64)
+    axis = p1 - p0
+    axis = axis / np.linalg.norm(axis)
+    # Orthonormal frame around the axis
+    ref = np.array([0.0, 0.0, 1.0]) if abs(axis[2]) < 0.9 else \
+        np.array([1.0, 0.0, 0.0])
+    u = np.cross(axis, ref)
+    u /= np.linalg.norm(u)
+    w = np.cross(axis, u)
+
+    verts = [tuple(p0), tuple(p1)]            # cap centres: 0, 1
+    for j in range(segs):
+        phi = 2.0 * np.pi * j / segs
+        rim = np.cos(phi) * u + np.sin(phi) * w
+        verts.append(tuple(p0 + r0 * rim))
+    for j in range(segs):
+        phi = 2.0 * np.pi * j / segs
+        rim = np.cos(phi) * u + np.sin(phi) * w
+        verts.append(tuple(p1 + r1 * rim))
+
+    faces = []
+    for j in range(segs):
+        j2 = (j + 1) % segs
+        a, b = 2 + j, 2 + j2                  # p0 rim
+        c, d = 2 + segs + j, 2 + segs + j2    # p1 rim
+        faces.append((0, b, a))               # p0 cap
+        faces.append((1, c, d))               # p1 cap
+        faces.append((a, b, d))               # side
+        faces.append((a, d, c))
+    m = Mesh(verts, faces)
+    # Winding fix: flip faces whose normal points toward the tube axis
+    tri = m.vertices[m.faces]
+    cent = tri.mean(axis=1)
+    mid = (p0 + p1) / 2.0
+    to_axis = cent - mid
+    inward = np.einsum('ij,ij->i', m.face_normals, to_axis) < 0
+    fixed = m.faces.copy()
+    fixed[inward] = fixed[inward][:, [0, 2, 1]]
+    return Mesh(m.vertices, fixed)
+
+
+def make_luxo(scale=1.0):
+    """An articulated desk lamp balanced on a ball - homage to the classic
+    animation. Ball, round base, two angled arms with joint spheres, and a
+    conical shade aimed down-forward."""
+    parts = []
+    # The ball (rests on y=0)
+    parts.append(make_uv_sphere((0.0, 1.5, 0.0), 1.5, seg_u=28, seg_v=18))
+    # Lamp base: a squat disc sitting on top of the ball
+    parts.append(make_tube((0.0, 2.95, 0.0), (0.0, 3.3, 0.0),
+                           0.95, 0.75, segs=24))
+    # Joints
+    parts.append(make_uv_sphere((0.0, 3.35, 0.0), 0.17, seg_u=12, seg_v=8))
+    elbow = (-0.75, 4.75, 0.0)
+    parts.append(make_uv_sphere(elbow, 0.16, seg_u=12, seg_v=8))
+    head_joint = (0.65, 5.55, 0.0)
+    parts.append(make_uv_sphere(head_joint, 0.16, seg_u=12, seg_v=8))
+    # Arms: lower leans back, upper leans forward
+    parts.append(make_tube((0.0, 3.35, 0.0), elbow, 0.09, 0.09, segs=14))
+    parts.append(make_tube(elbow, head_joint, 0.09, 0.09, segs=14))
+    # Shade: cone opening down-forward from the head joint
+    axis = np.array([0.75, -0.85, 0.0])
+    axis /= np.linalg.norm(axis)
+    neck = np.asarray(head_joint) + axis * 0.12
+    mouth = np.asarray(head_joint) + axis * 1.05
+    parts.append(make_tube(neck, mouth, 0.16, 0.62, segs=24))
+
+    merged = merge_meshes(parts)
+    if scale != 1.0:
+        merged = Mesh(merged.vertices * scale, merged.faces)
+    return merged
+
+
+def make_cobra_mk1(scale=1.0):
+    """Angular wedge spacecraft in the spirit of Elite's Cobra Mk I:
+    pointed nose, wide flat wing plan, raised cockpit ridge fore, matching
+    keel below, flat hexagonal tail panel.
+
+    Every face gets its own vertices so vertex normals equal face normals -
+    the hull shades as flat facets (an angular ship must not be smoothed).
+    Winding is fixed automatically: the hull is star-shaped around the
+    origin, so any face whose normal points inward is flipped.
+    """
+    s = scale
+    v = np.array([
+        [0.0, 0.0, -3.4],    # 0 nose
+        [-3.4, 0.0, 2.2],    # 1 wingtip left
+        [3.4, 0.0, 2.2],     # 2 wingtip right
+        [-1.2, 0.8, 2.2],    # 3 tail top left
+        [1.2, 0.8, 2.2],     # 4 tail top right
+        [-1.2, -0.8, 2.2],   # 5 tail bottom left
+        [1.2, -0.8, 2.2],    # 6 tail bottom right
+        [0.0, 0.9, -0.6],    # 7 cockpit ridge peak
+        [0.0, -0.9, -0.2],   # 8 keel peak
+        [0.0, 0.0, 2.2],     # 9 tail centre (fan point)
+    ]) * s
+
+    hull = [
+        # Upper hull: nose -> ridge -> tail top edge, out to the wingtips
+        (0, 1, 7), (1, 3, 7), (7, 3, 4), (7, 4, 2), (0, 7, 2),
+        # Lower hull, mirrored through the keel
+        (0, 8, 1), (1, 8, 5), (8, 6, 5), (8, 2, 6), (0, 2, 8),
+        # Tail panel: hexagon fanned from the centre
+        (9, 1, 5), (9, 5, 6), (9, 6, 2), (9, 2, 4), (9, 4, 3), (9, 3, 1),
+    ]
+
+    # Fix winding so every face normal points away from the interior
+    tris = []
+    for (a, b, c) in hull:
+        p0, p1, p2 = v[a], v[b], v[c]
+        n = np.cross(p1 - p0, p2 - p1)
+        centroid = (p0 + p1 + p2) / 3.0
+        if np.dot(n, centroid) < 0:
+            p1, p2 = p2, p1
+        tris.append((p0, p1, p2))
+
+    # Per-face vertices: no sharing, so shading stays flat-faceted
+    verts = np.array([p for tri in tris for p in tri])
+    faces = np.arange(len(verts)).reshape(-1, 3)
+    return Mesh(verts, faces)
+
+
 if __name__ == '__main__':
     m = Mesh([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)],
              [(0, 1, 2), (0, 2, 3)])

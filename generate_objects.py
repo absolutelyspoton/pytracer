@@ -15,6 +15,8 @@ import mesh
 GENERATORS = {
     'torus': lambda: mesh.make_torus(major=2.2, minor=1.0,
                                      seg_u=48, seg_v=24),
+    'cobra_mk1': lambda: mesh.make_cobra_mk1(),
+    'luxo_lamp': lambda: mesh.make_luxo(),
 }
 
 
