@@ -8,22 +8,22 @@
 
 # Classes for modelling vertices
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 import matrix
 
 class vertex(BaseModel):
-    x_world:float = 0.0
-    y_world:float = 0.0
-    z_world:float = 0.0
-    x_view:Optional[float] = 0.0
-    y_view:Optional[float] = 0.0
-    z_view:Optional[float] = 0.0
-    x_screen:Optional[float] = 0.0
-    y_screen:Optional[float] = 0.0
-    z_screen:Optional[float] = 0.0
-    index:Optional[int] = 0
-    normal:Optional[List] = []
+    x_world: float = 0.0
+    y_world: float = 0.0
+    z_world: float = 0.0
+    x_view: Optional[float] = 0.0
+    y_view: Optional[float] = 0.0
+    z_view: Optional[float] = 0.0
+    x_screen: Optional[float] = 0.0
+    y_screen: Optional[float] = 0.0
+    z_screen: Optional[float] = 0.0
+    index: Optional[int] = 0
+    normal: Optional[List] = Field(default_factory=list)
 
     # calc linear transform of world coordinates to transformed coordinates, store results
     def calc_view_coordinates(self,I) -> None:
@@ -48,7 +48,7 @@ class vertex(BaseModel):
         return None
 
 class vertices(BaseModel):
-    vertex_list: List = []
+    vertex_list: List = Field(default_factory=list)
 
     def add_vertex(self,v:vertex):
         self.vertex_list.append(v)

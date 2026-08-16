@@ -3,14 +3,14 @@
 # 
 # Classes for surfaces ( collection of faces ( list of indexes to vertices ))
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 
 class surface_cell(BaseModel):
-    vertex_list: List = []
-    normal: List = []
-    culled = False
-    index:Optional[int] = 0
+    vertex_list: List = Field(default_factory=list)
+    normal: List = Field(default_factory=list)
+    culled: bool = False
+    index: Optional[int] = 0
 
     # add index to the index list for this face
     def add_face_index(self,vl:List):
@@ -21,7 +21,7 @@ class surface_cell(BaseModel):
         return(len(self.vertex_list)) 
 
 class surface(BaseModel):
-    surface_list: List = []
+    surface_list: List = Field(default_factory=list)
 
     def add_face(self,f:surface_cell) -> None:
         self.surface_list.append(f)
