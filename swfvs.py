@@ -12,7 +12,7 @@ import math
 import surface
 import vertex as v
 
-INPUT_DATA_SOURCE = 'db' # 'db' or 'file'
+INPUT_DATA_SOURCE = 'file' # 'db' or 'file'
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 800
 
@@ -28,18 +28,27 @@ def CalcVectorNormals():
         totalvec_x = 0
         totalvec_y = 0
         totalvec_z = 0
-        totalvec = [totalvec_x,totalvec_y,totalvec_z]
-        sc = 1
+        sc = 0
         for s in surfaces.surface_list:
             if v.index in s.vertex_list:
                 totalvec_x = totalvec_x + s.normal[0]
                 totalvec_y = totalvec_y + s.normal[1]
                 totalvec_z = totalvec_z + s.normal[2]
-                totalvec = [totalvec_x,totalvec_y,totalvec_z]
-                sc+=1
-        v.normal = matrix.NormaliseVector(totalvec)
+                sc += 1
+        if sc > 0:
+            v.normal = matrix.NormaliseVector([totalvec_x/sc, totalvec_y/sc, totalvec_z/sc])
     print('... done')
     
+def validate_surfaces(surfaces, vertex_count):
+    """Validate that all surface vertex references are within range."""
+    for face in surfaces.surface_list:
+        for vertex_idx in face.vertex_list:
+            if vertex_idx < 1 or vertex_idx > vertex_count:
+                raise ValueError(
+                    f"Face {face.index} references vertex {vertex_idx}, "
+                    f"but only {vertex_count} vertices loaded"
+                )
+
 def Toggle(flag):
     if flag:
         return False
@@ -290,6 +299,10 @@ if __name__ == '__main__':
         print("loading surfaces from file ...")
         surfaces = loader.load_surfaces_file()
         print('... done')
+
+    print('validating surfaces ...')
+    validate_surfaces(surfaces, vertices.vertex_count())
+    print('... done')
 
     print('starting render mode ...')
     start()

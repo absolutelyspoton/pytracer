@@ -107,7 +107,7 @@ def NormaliseVector(v):
     r = [0,0,0]
     denom = VectorMagnitude(v)
 
-    if denom == 0.0:
+    if abs(denom) < 1e-9:
         r[0] = v[0]
         r[1] = v[1]
         r[2] = v[2]

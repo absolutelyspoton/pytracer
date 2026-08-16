@@ -51,13 +51,10 @@ def load_surfaces_file():
         csv_reader = csv.reader(csv_file,delimiter=',')
         line_count = 0
         for row in csv_reader:
-            if line_count > 0: 
+            if line_count > 0:
                 face = S.surface_cell()
                 face.index = line_count
-                face.add_face_index(row)
-                row[0] = int(row[0])  # type: ignore
-                row[1] = int(row[1])  # type: ignore
-                row[2] = int(row[2])  # type: ignore
+                face.add_face_index([int(x) for x in row])
                 surfaces.add_face(face)
             line_count += 1
     return(surfaces)
