@@ -45,19 +45,13 @@ def test_file_loader():
     print("=== Testing File Loader ===")
     try:
         import loader
-        import vertex
-        import surface
 
-        print("Loading vertices from file...")
-        vertices = loader.load_vertices_file()
-        print(f"✓ Loaded {vertices.vertex_count()} vertices")
+        print("Loading mesh from file...")
+        m = loader.load_mesh_file()
+        print(f"✓ Loaded {m.vertex_count()} vertices, {m.face_count()} faces")
 
-        print("Loading surfaces from file...")
-        surfaces = loader.load_surfaces_file()
-        print(f"✓ Loaded {surfaces.surface_count()} surfaces")
-
-        if vertices.vertex_count() == 0 or surfaces.surface_count() == 0:
-            print("✗ File loader returned empty collections")
+        if m.vertex_count() == 0 or m.face_count() == 0:
+            print("✗ File loader returned an empty mesh")
             return False
 
         print("✓ File loader works\n")

@@ -9,6 +9,7 @@
 # in front of the camera.
 
 import math
+import numpy as np
 import matrix
 
 class Camera:
@@ -45,6 +46,21 @@ class Camera:
     def dolly(self, factor):
         """Move the camera toward (factor < 1) or away from (factor > 1) the origin."""
         self.distance = max(self.min_distance, self.distance * factor)
+
+    def project(self, view_points, viewport):
+        """Vectorised projection: (N, 3) view-space points -> ((N, 2) pane
+        screen coordinates, (N,) clipped mask). Clipped points (at or behind
+        the near plane) get parked far off-screen so they never count as
+        in-pane; faces touching one are skipped by the renderer."""
+        p = np.asarray(view_points)
+        z = p[:, 2]
+        clipped = z <= self.near
+        safe_z = np.where(clipped, 1.0, z)
+        screen = np.empty((len(p), 2))
+        screen[:, 0] = viewport.center_x + p[:, 0] / safe_z * self.pixels_per_unit
+        screen[:, 1] = viewport.center_y + p[:, 1] / safe_z * self.pixels_per_unit
+        screen[clipped] = -1.0e9
+        return screen, clipped
 
     def reset(self):
         self.distance = self.default_distance

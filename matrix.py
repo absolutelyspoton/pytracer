@@ -1,179 +1,177 @@
 # Author: Dominic Williams
 # Date created: 10 Aug 2022
-# 
+# v3 (Aug 2026): rewritten on numpy - same conventions, batch operations.
+#
 # Matrix Maths Module
+#
+# Conventions (unchanged from v1/v2): matrices are row-major 4x4; vectors
+# are ROW vectors multiplied on the left (v @ M), so translation lives in
+# row 3 (m[3][0..2]), not the last column. New matrix code must follow this
+# or transforms compose incorrectly.
 
 import math
+import numpy as np
 
-VECTOR_SIZE = 4 # 4x4 Matrices
+VECTOR_SIZE = 4  # 4x4 matrices
 
-# Return zero matrix
-# [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
+
 def ZeroMatrix():
-    return [[0 for i in range(VECTOR_SIZE)] for j in range(VECTOR_SIZE)]  
+    return np.zeros((4, 4))
 
-# Return identity matrix
-# [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]
+
 def IdentityMatrix():
-    arr = ZeroMatrix()
-    for i in range(VECTOR_SIZE):
-        for j in range(VECTOR_SIZE):
-            if i == j:
-                arr[i][j] = 1
-    return arr
+    return np.identity(4)
 
-#M Matrix multiplication of two matrices
-def MatrixMult(m1,m2):
-    mz = ZeroMatrix()
-    for i in range(VECTOR_SIZE):
-        for j in range(VECTOR_SIZE):
-            for e in range(VECTOR_SIZE):
-                mz[i][j] = mz[i][j] + m1[i][e]*m2[e][j]
-    return(mz)
 
-def MatrixVector(m,v):
-    x = m[0][0] * v[0] + m[1][0] * v[1] + m[2][0] * v[2] + m[3][0]
-    y = m[0][1] * v[0] + m[1][1] * v[1] + m[2][1] * v[2] + m[3][1]
-    z = m[0][2] * v[0] + m[1][2] * v[1] + m[2][2] * v[2] + m[3][2]
-    return (x, y, z)
+def MatrixMult(m1, m2):
+    return np.asarray(m1) @ np.asarray(m2)
 
-# Homogeneous variant: also computes the w component (column 3), needed for
-# the perspective divide. MatrixVector above drops w and stays the fast path
-# for affine transforms.
-def MatrixVectorH(m,v):
-    x = m[0][0] * v[0] + m[1][0] * v[1] + m[2][0] * v[2] + m[3][0]
-    y = m[0][1] * v[0] + m[1][1] * v[1] + m[2][1] * v[2] + m[3][1]
-    z = m[0][2] * v[0] + m[1][2] * v[1] + m[2][2] * v[2] + m[3][2]
-    w = m[0][3] * v[0] + m[1][3] * v[1] + m[2][3] * v[2] + m[3][3]
-    return (x, y, z, w)
 
-# Matrix maths to rotate through x,y,z axis
-def RotateMatrix(x_theta,y_theta,z_theta):
+def MatrixVector(m, v):
+    """Single row-vector transform (affine part). Kept for tests and
+    call sites that work one point at a time; batch code uses
+    transform_points."""
+    m = np.asarray(m)
+    x, y, z = float(v[0]), float(v[1]), float(v[2])
+    return (x * m[0, 0] + y * m[1, 0] + z * m[2, 0] + m[3, 0],
+            x * m[0, 1] + y * m[1, 1] + z * m[2, 1] + m[3, 1],
+            x * m[0, 2] + y * m[1, 2] + z * m[2, 2] + m[3, 2])
 
-    x_rad = math.radians(x_theta)
-    y_rad = math.radians(y_theta)
-    z_rad = math.radians(z_theta)
 
-    # Rotation through z-axis
-    arr_z = IdentityMatrix()
-    arr_z[0][0] = math.cos(z_rad)  # type: ignore
-    arr_z[1][0] = math.sin(z_rad) * -1 # type: ignore
-    arr_z[0][1] = math.sin(z_rad) # type: ignore
-    arr_z[1][1] = math.cos(z_rad) # type: ignore
+def MatrixVectorH(m, v):
+    """Homogeneous single-vector transform: also returns w (column 3),
+    needed for the perspective divide."""
+    m = np.asarray(m)
+    x, y, z = float(v[0]), float(v[1]), float(v[2])
+    return (x * m[0, 0] + y * m[1, 0] + z * m[2, 0] + m[3, 0],
+            x * m[0, 1] + y * m[1, 1] + z * m[2, 1] + m[3, 1],
+            x * m[0, 2] + y * m[1, 2] + z * m[2, 2] + m[3, 2],
+            x * m[0, 3] + y * m[1, 3] + z * m[2, 3] + m[3, 3])
 
-    # Rotation through y-axis
-    arr_y = IdentityMatrix()
-    arr_y[0][0] = math.cos(y_rad) # type: ignore
-    arr_y[2][0] = math.sin(y_rad) # type: ignore
-    arr_y[0][2] = math.sin(y_rad) * -1 # type: ignore
-    arr_y[2][2] = math.cos(y_rad) # type: ignore
 
-    # Rotation through x-axis
-    arr_x = IdentityMatrix()
-    arr_x[1][1] = math.cos(x_rad) # type: ignore
-    arr_x[2][1] = math.sin(x_rad) * -1 # type: ignore
-    arr_x[1][2] = math.sin(x_rad) # type: ignore
-    arr_x[2][2] = math.cos(x_rad) # type: ignore
+def transform_points(points, m):
+    """Batch row-vector transform: (N, 3) points -> (N, 3), one matmul."""
+    p = np.asarray(points)
+    return p @ m[:3, :3] + m[3, :3]
 
-    m = MatrixMult(arr_x,arr_y)
-    m = MatrixMult(m,arr_z)
 
-    return(m)
+def transform_directions(directions, m):
+    """Batch direction transform (rotation only - no translation row)."""
+    return np.asarray(directions) @ np.asarray(m)[:3, :3]
 
-def ScaleMatrix(x,y,z):
-    m = IdentityMatrix()
-    m[0][0] = x
-    m[1][1] = y
-    m[2][2] = z
-    return(m)
 
-def TranslateMatrix(x,y,z):
-    m = IdentityMatrix()
-    m[3][0] = x
-    m[3][1] = y
-    m[3][2] = z
-    m[3][3] = 1
-    return(m)
+def RotateMatrix(x_theta, y_theta, z_theta):
+    x = math.radians(x_theta)
+    y = math.radians(y_theta)
+    z = math.radians(z_theta)
 
-# Perspective projection for row vectors: w = z / focal_distance, so after the
-# homogeneous divide x' = x * focal_distance / z (points shrink with distance).
-# Use with MatrixVectorH; MatrixVector ignores column 3 and cannot apply this.
+    arr_z = np.identity(4)
+    arr_z[0, 0] = math.cos(z)
+    arr_z[1, 0] = -math.sin(z)
+    arr_z[0, 1] = math.sin(z)
+    arr_z[1, 1] = math.cos(z)
+
+    arr_y = np.identity(4)
+    arr_y[0, 0] = math.cos(y)
+    arr_y[2, 0] = math.sin(y)
+    arr_y[0, 2] = -math.sin(y)
+    arr_y[2, 2] = math.cos(y)
+
+    arr_x = np.identity(4)
+    arr_x[1, 1] = math.cos(x)
+    arr_x[2, 1] = -math.sin(x)
+    arr_x[1, 2] = math.sin(x)
+    arr_x[2, 2] = math.cos(x)
+
+    return arr_x @ arr_y @ arr_z
+
+
+def ScaleMatrix(x, y, z):
+    m = np.identity(4)
+    m[0, 0] = x
+    m[1, 1] = y
+    m[2, 2] = z
+    return m
+
+
+def TranslateMatrix(x, y, z):
+    m = np.identity(4)
+    m[3, 0] = x
+    m[3, 1] = y
+    m[3, 2] = z
+    return m
+
+
 def PerspectiveMatrix(focal_distance=10.0):
-    m = IdentityMatrix()
-    m[2][3] = 1.0 / focal_distance  # type: ignore
-    m[3][3] = 0
-    return(m)
+    """Perspective projection for row vectors: w = z / focal_distance, so
+    after the homogeneous divide x' = x * focal_distance / z."""
+    m = np.identity(4)
+    m[2, 3] = 1.0 / focal_distance
+    m[3, 3] = 0.0
+    return m
+
 
 def OrthographicMatrix():
-    m = IdentityMatrix()
-    m[2][2] = 0
-    return(m)
+    m = np.identity(4)
+    m[2, 2] = 0.0
+    return m
 
-def VectorMagnitude(v) ->float:
-    return math.sqrt((v[0]*v[0])+(v[1]*v[1])+(v[2]*v[2]))
-    
+
+def VectorMagnitude(v) -> float:
+    return float(np.linalg.norm(np.asarray(v, dtype=np.float64)))
+
+
 def NormaliseVector(v):
-    denom = VectorMagnitude(v)
+    a = np.asarray(v, dtype=np.float64)
+    denom = np.linalg.norm(a)
+    if denom < 1e-9:
+        return (float(a[0]), float(a[1]), float(a[2]))
+    a = a / denom
+    return (float(a[0]), float(a[1]), float(a[2]))
 
-    if abs(denom) < 1e-9:
-        return (v[0], v[1], v[2])
-    else:
-        t = 1.0 / denom
-        return (v[0]*t, v[1]*t, v[2]*t)
 
-def DotProduct(v1,v2):
-    return ( (v1[0]*v2[0]) + (v1[1]*v2[1]) + (v1[2]*v2[2]) )
+def DotProduct(v1, v2):
+    return float(np.dot(np.asarray(v1, dtype=np.float64),
+                        np.asarray(v2, dtype=np.float64)))
 
-def CalcSurfaceNormal(v1,v2,v3):
-    # Calculate collinear vectors
-    a_x, a_y, a_z = v2[0]-v1[0], v2[1]-v1[1], v2[2]-v1[2]
-    b_x, b_y, b_z = v3[0]-v2[0], v3[1]-v2[1], v3[2]-v2[2]
 
-    # Calculate the normal and return it
-    x = a_y * b_z - a_z * b_y
-    y = a_z * b_x - a_x * b_z
-    z = a_x * b_y - a_y * b_x
+def CalcSurfaceNormal(v1, v2, v3):
+    a = np.asarray(v2, dtype=np.float64) - np.asarray(v1, dtype=np.float64)
+    b = np.asarray(v3, dtype=np.float64) - np.asarray(v2, dtype=np.float64)
+    n = np.cross(a, b)
+    return (float(n[0]), float(n[1]), float(n[2]))
 
-    return (x, y, z)
 
 def PrintMatrix(m):
-    for n in m:
-        print(n)
+    for row in np.asarray(m):
+        print(list(row))
 
-if (__name__ == '__main__'):
-    
+
+if __name__ == '__main__':
+
     I = IdentityMatrix()
     PrintMatrix(I)
-    
+
     Z = ZeroMatrix()
     PrintMatrix(Z)
-    
-    PrintMatrix(MatrixMult(I,Z))
 
-    print(MatrixVector(Z,[1,2,3]))
+    PrintMatrix(MatrixMult(I, Z))
 
-    PrintMatrix(RotateMatrix(45,30,150))
+    print(MatrixVector(Z, [1, 2, 3]))
 
-    PrintMatrix(ScaleMatrix(3,6,9))
+    PrintMatrix(RotateMatrix(45, 30, 150))
 
-    PrintMatrix(TranslateMatrix(0.5,0.5,0.5))
+    PrintMatrix(ScaleMatrix(3, 6, 9))
+
+    PrintMatrix(TranslateMatrix(0.5, 0.5, 0.5))
 
     PrintMatrix(OrthographicMatrix())
 
     PrintMatrix(PerspectiveMatrix())
 
-    v1 = [0,0,0]
-    v2 = [1,2,3]
-    v3 = [4,5,6]
-    v4 = [0.343,0.423,0.122]
-    v5 = [-0.123,-0.987,-0.876]
+    print(NormaliseVector([1, 2, 3]))
+    print(DotProduct([4, 5, 6], [0.343, 0.423, 0.122]))
+    print(CalcSurfaceNormal([0, 0, 0], [1, 2, 3], [4, 5, 6]))
 
-    print(NormaliseVector(v1))
-    print(NormaliseVector(v2))
-    print(NormaliseVector(v3))
-
-    print(DotProduct(v1,v2))
-    print(DotProduct(v3,v4))
-    print(DotProduct(v5,v2))
-
-    print(CalcSurfaceNormal(v1,v2,v3))
+    pts = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    print(transform_points(pts, TranslateMatrix(10, 20, 30)))

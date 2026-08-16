@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A from-scratch 3D wireframe viewer / nascent ray tracer in Python. All linear algebra is hand-rolled (no numpy). The
-long-term goal (see the Feature History table in `README.md`) is to progress from wireframe rendering toward backplane
-culling, lighting, and Phong/Gouraud shading. `README.md` also holds the authoritative key-binding table for the viewer.
+A from-scratch 3D renderer / nascent ray tracer in Python. Through v2 (tag `v2`) all linear algebra was hand-rolled
+scalar Python; **v3 (current) is an array-oriented rewrite on numpy** — batched transforms, a fragment rasteriser with
+a z-buffer (`render.py`), deferred batch shading, and per-frame shadow mapping — in readiness for ray tracing.
+`README.md` holds the Feature History table and the authoritative key-binding table for the viewer.
 
 ## Commands
 
@@ -25,29 +26,29 @@ lint/typecheck config; the codebase relies on scattered `# type: ignore` comment
 
 ## Architecture
 
-Rendering pipeline, driven by the main loop in `swfvs.py:start()`:
+Rendering pipeline, driven by the main loop in `swfvs.py:start()`. All geometry lives in numpy arrays (`mesh.Mesh`:
+vertices N×3, faces M×3 0-based, face/vertex normals) and every stage operates on whole meshes at once:
 
-1. **Load** — `loader.py` builds a `vertices` collection and a `surface` collection from one of two sources, selected by
-   the `INPUT_DATA_SOURCE` constant at the top of `swfvs.py` (`'db'` or `'file'`).
-2. **Transform** — each frame composes scale × rotate × translate into a single 4x4 matrix `M` (`matrix.py`), applies it
-   to every vertex to get *view* coordinates, then applies a projection matrix to get *screen* coordinates.
-3. **Draw** — faces are drawn as pygame polygons from the screen coordinates; normals and axis legend are optional
-   overlays toggled by key.
-
-Coordinate spaces are the central concept: every `vertex` carries three coordinate triples — `*_world` (loaded, immutable),
-`*_view` (post-transform), `*_screen` (post-projection). `calc_view_coordinates()` and `calc_screen_coordinates()` mutate
-the vertex in place; the world coordinates are the only source of truth across frames.
+1. **Load** — `loader.load_mesh_file()` / `load_mesh_api()` (selected by `INPUT_DATA_SOURCE` in `swfvs.py`) return a `Mesh`.
+2. **Transform** — one `verts @ M` per frame (`matrix.transform_points`); camera projection is vectorised
+   (`camera.Camera.project` → screen coords + near-plane clip mask).
+3. **Draw** — wireframe/hidden-line use pygame `aalines` (C-speed); solid/gouraud/phong go through the **fragment
+   pipeline** (`render.rasterize`): flat arrays of every candidate pixel of every triangle, barycentric weights in bulk,
+   a z-buffer resolve keeping the nearest fragment per pixel, deferred batch shading (`light.phong_shade_batch`), and one
+   `surfarray.blit_array`. The floor is scene geometry; shadows come from a per-frame shadow map (`shadow.py`) built with
+   the same rasteriser pointed down the light axis. Interactive frames render at half resolution; a supersampled still is
+   rendered and cached when the view goes still (`SSAA_*` constants in `swfvs.py`).
 
 ### Modules
 
-- `matrix.py` — pure functions over 4x4 matrices and 3-vectors. Note the convention: matrices are **row-major lists of
-  lists**, and `MatrixVector` treats the vector as a row vector multiplied on the left, so translation lives in row 3
-  (`m[3][0..2]`), not the last column. New matrix code must follow this or transforms compose incorrectly.
-- `vertex.py` / `surface.py` — pydantic `BaseModel` classes (deliberately used instead of dataclasses, per `DEVLOG.md`, so
-  the same models serve FastAPI). `surface_cell.vertex_list` holds **1-based indices** into the vertex list; call sites
-  subtract 1 when indexing (see `swfvs.py`).
-- `loader.py` — four loaders: `load_vertices_file` / `load_surfaces_file` read the CSVs in `objects/`;
-  `load_vertices_api` / `load_surfaces_api` GET from the FastAPI service. Both paths must produce equivalent collections.
+- `matrix.py` — numpy 4x4 builders + batch transforms. Note the convention: **row vectors multiplied on the left**
+  (`v @ M`), so translation lives in row 3 (`m[3][0..2]`), not the last column. New matrix code must follow this or
+  transforms compose incorrectly.
+- `mesh.py` — `Mesh` arrays + vectorised normals; `floor_mesh()` builds the tessellated ground plane (tessellated because
+  rasteriser cost scales with triangle bounding boxes).
+- `render.py` / `light.py` / `shadow.py` / `camera.py` — the batch pipeline stages described above.
+- `loader.py` — file loader reads the CSVs in `objects/` (faces are **1-based** in the CSVs, converted to 0-based on
+  load); API loader GETs from the FastAPI service. Both paths must produce equivalent meshes.
 - `server.py` — thin generic MongoDB read API. `GET /db/{database}/{table}/{id}` maps directly onto
   `client[database][table].find(...)`, with `id=0` meaning "all rows". Also exposes `/ping/{webserver|database|google}`
   returning a Prometheus-style metric line.

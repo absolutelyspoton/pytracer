@@ -58,18 +58,35 @@ model, the rasteriser, and shadow geometry. Run from the project root:
 4. **Pure-Python per-pixel work has a ceiling**: ~250k pixel writes/frame is
    the budget; only array-oriented restructuring (v3) moves it.
 
-## v3 Direction
+## v3: Numpy Array-Oriented Renderer (this branch)
 
-Rewrite the pipeline array-oriented on numpy - measured on this machine:
-batch vertex transform 118x, batch lighting 8x, full-frame pixel writes
-173x. The naive per-triangle port loses (0.9x), so v3 restructures around
-flat arrays: batched transforms, a z-buffer instead of painter's sorting,
-vectorised barycentric rasterisation, full-frame lighting, one
-`surfarray.blit_array` per frame. This is the same array-first shape a ray
-tracer needs (millions of batched rays), which is the point of v3.
+Full feature-parity rewrite on numpy: `Mesh` arrays, batched transforms,
+a fragment rasteriser with a z-buffer (`render.py`) replacing painter's
+sorting, deferred batch shading, and per-frame shadow mapping. Notable
+upgrades over v2:
+
+- **Self-shadowing runs live in every filled mode** (v2: stills only).
+- **The floor is scene geometry** - it occludes and receives mapped
+  shadows; the v2 planar-projection special case is gone.
+- **Exact per-pixel occlusion** (z-buffer) instead of per-face sorting.
+- Adaptive quality: half-res interactive, cached 2x-supersampled still
+  after ~0.25s of stillness (still renders in ~0.3-0.5s vs v2's ~1s).
+
+### v2 vs v3 (measured, uncapped)
+
+| Mode | v2 interactive | v3 interactive | v3 notes |
+|------|----------------|----------------|----------|
+| wireframe | 67 FPS | 79 FPS | AA + depth cue |
+| solid | ~45 FPS | ~109 FPS | now with live self-shadowing |
+| gouraud | 18 FPS | ~20 FPS | + live self-shadowing |
+| phong | 11 FPS | ~23 FPS | + live self-shadowing |
+| cached still redraw | ~130 FPS | ~215 FPS | |
+
+The pipeline's flat-array shape (batch geometry in, batch shaded samples
+out) is the same structure the ray tracer needs - rays replace fragments.
 
 ## Branches
 
-- **main**: v2 complete (this state, tagged `v2`)
-- **v3**: numpy rewrite (branched from here)
+- **main**: v2 complete (tagged `v2`)
+- **v3**: numpy rewrite (current)
 - **v2**: historical optimisation branch (superseded by main)

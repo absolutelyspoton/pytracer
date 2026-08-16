@@ -12,6 +12,7 @@ fastapi==0.86.0
 h11==0.14.0
 idna==3.4
 iniconfig==1.1.1
+numpy>=2.0
 packaging==21.3
 pluggy==1.0.0
 pycurl==7.45.1

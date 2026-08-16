@@ -8,6 +8,7 @@
 # The light direction is likewise defined in view space, so it stays fixed
 # relative to the viewer while the model rotates under it.
 
+import numpy as np
 import matrix
 
 # Material properties (a future material concept can move these onto objects)
@@ -70,6 +71,46 @@ def phong_intensity(normal, point_view, light):
                 spec = SPECULAR_COEFF * light.specular * (r_dot_v ** SHININESS)
 
     return (min(base, 1.0), min(spec, 1.0))
+
+
+def phong_shade_batch(normals, points, light, shadowed=None):
+    """Vectorised Phong reflection model.
+
+    normals:  (N, 3) unit normals, view space
+    points:   (N, 3) view-space positions (camera at the origin)
+    shadowed: optional (N,) bool - shadowed samples keep ambient only
+    Returns (N, 3) uint8 colours.
+    """
+    n = np.asarray(normals)
+    p = np.asarray(points)
+    L = np.asarray(light.to_light)
+
+    n_dot_l = n @ L
+    lit = n_dot_l > 0.0
+    if shadowed is not None:
+        lit = lit & ~np.asarray(shadowed)
+
+    base = np.full(len(n), AMBIENT_COEFF * light.ambient)
+    base[lit] += DIFFUSE_COEFF * light.diffuse * n_dot_l[lit]
+
+    spec = np.zeros(len(n))
+    if lit.any():
+        nl = n[lit]
+        pl = p[lit]
+        refl = 2.0 * n_dot_l[lit, None] * nl - L
+        p_len = np.linalg.norm(pl, axis=1)
+        p_len[p_len < 1e-9] = 1.0
+        r_dot_v = -np.einsum('ij,ij->i', refl, pl) / p_len
+        pos = r_dot_v > 0.0
+        s = np.zeros(len(nl))
+        s[pos] = SPECULAR_COEFF * light.specular * r_dot_v[pos] ** SHININESS
+        spec[lit] = s
+
+    np.clip(base, None, 1.0, out=base)
+    np.clip(spec, None, 1.0, out=spec)
+    colors = (np.outer(base, np.asarray(MATERIAL_BASE_COLOR, dtype=np.float64))
+              + 255.0 * spec[:, None])
+    return np.clip(colors, 0, 255).astype(np.uint8)
 
 
 def ambient_shade(light):

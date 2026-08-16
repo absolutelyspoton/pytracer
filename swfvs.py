@@ -1,50 +1,37 @@
 # Author: Dominic Williams
 # Date created: 10 Aug 2022
+# v3 (Aug 2026): array-oriented pipeline on numpy - batched transforms,
+# fragment rasterisation with a z-buffer, deferred batch shading, per-frame
+# shadow mapping. Same five render modes and key bindings as v2.
 #
 # Simple Wireframe Viewing System using pygame for 2D graphical drawing system
 
+import numpy as np
 import pygame
-import time
+import sys
+
+import camera as camera_module
+import light
 import loader
 import matrix
-import sys
-import surface
-import vertex as v
+import mesh as mesh_module
+import render
+import shadow
 import viewer_state
 import viewport
-import light
-import raster
-import shadow
 
 INPUT_DATA_SOURCE = 'file'  # 'db' or 'file'
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 800
 
-# Gouraud/Phong rasterise per pixel in pure Python, so they render into a
-# reduced-resolution buffer scaled up to the pane. 2 = half resolution
-# (4x fewer pixels); set to 1 for full resolution at ~4x the frame time.
-RENDER_SCALE = 2
-
-# Solid mode anti-aliasing: supersample the pane by this factor and smooth-
-# downscale (pygame polygon fills are C-speed, so 2x2 oversampling is cheap).
-# Set to 1 to disable.
-SOLID_SSAA = 2
-
-# Gouraud/Phong still-image anti-aliasing: while the view is changing they
-# render at 1/RENDER_SCALE resolution for interactivity; once the view has
-# been still for STILL_FRAMES_FOR_HQ frames, one supersampled frame is
-# rendered at SSAA_STILL x pane resolution (slow - seconds for Phong) and
-# cached until the view changes again.
+# Filled-mode quality: while the view changes, the fragment pipeline renders
+# at SSAA_INTERACTIVE x pane resolution (0.5 = half res, smooth-upscaled);
+# once the view has been still for STILL_FRAMES_FOR_HQ frames, one
+# SSAA_STILL supersampled anti-aliased frame is rendered (~0.3s) and cached
+# until the view changes again.
+SSAA_INTERACTIVE = 0.5
 SSAA_STILL = 2
 STILL_FRAMES_FOR_HQ = 15
-
-# Interactive Phong evaluates lighting every Nth pixel (held between) for
-# speed; anti-aliased stills always use per-pixel lighting (step 1).
-PHONG_INTERACTIVE_STEP = 2
-
-# Ground plane (filled modes): a neutral stage the shadows fall on
-FLOOR_BASE_COLOR = (152, 152, 158)
-SHADOW_DARKEN = 0.45  # shadowed floor = floor colour x this factor
 
 # Color constants
 COLOR_BLACK = (0, 0, 0)
@@ -54,83 +41,29 @@ COLOR_BLUE = (0, 0, 255)
 COLOR_GREEN = (0, 255, 0)
 COLOR_MAGENTA = (255, 0, 255)
 
-vertices = v.vertices()
-surfaces = surface.surface()
+FLOOR_BASE_COLOR = (152, 152, 158)
 
-
-def validate_surfaces(surfaces, vertex_count):
-    """Validate that all surface vertex references are within range."""
-    for face in surfaces.surface_list:
-        for vertex_idx in face.vertex_list:
-            if vertex_idx < 1 or vertex_idx > vertex_count:
-                raise ValueError(
-                    f"Face {face.index} references vertex {vertex_idx}, "
-                    f"but only {vertex_count} vertices loaded"
-                )
+the_mesh = None  # loaded in __main__
 
 
 def start():
-    """Main render loop using encapsulated ViewerState."""
+    """Main render loop using the array-oriented pipeline."""
 
-    # Initialize pygame
     pygame.init()
-    size = SCREEN_WIDTH, SCREEN_HEIGHT
-    screen = pygame.display.set_mode(size)
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     screen.fill(COLOR_WHITE)
 
-    # Initialize state and input handler
     state = viewer_state.ViewerState(SCREEN_WIDTH, SCREEN_HEIGHT)
     input_handler = viewer_state.InputHandler(state)
 
-    # Initialize viewport (800×600 centered in main window) and point the
-    # camera's projection at it
     vp = viewport.DEFAULT_VIEWPORT
     state.camera.attach_viewport(vp)
 
-    # Center the model about the world origin (the teapot data sits on y=0),
-    # so it rotates about its middle and frames symmetrically in the pane
-    xs = [vtx.x_world for vtx in vertices.vertex_list]
-    ys = [vtx.y_world for vtx in vertices.vertex_list]
-    zs = [vtx.z_world for vtx in vertices.vertex_list]
-    MC = matrix.TranslateMatrix(-(min(xs) + max(xs)) / 2.0,
-                                -(min(ys) + max(ys)) / 2.0,
-                                -(min(zs) + max(zs)) / 2.0)
-
-    # Offscreen buffer for the per-pixel shading modes (see RENDER_SCALE)
-    raster_buffer = pygame.Surface((vp.width // RENDER_SCALE,
-                                    vp.height // RENDER_SCALE))
-
-    # Oversized buffer for solid-mode supersampled anti-aliasing (SOLID_SSAA)
-    solid_buffer = pygame.Surface((vp.width * SOLID_SSAA,
-                                   vp.height * SOLID_SSAA))
-
-    # Oversized buffer + cache for Gouraud/Phong anti-aliased stills
-    hq_buffer = pygame.Surface((vp.width * SSAA_STILL,
-                                vp.height * SSAA_STILL))
-    hq_sig = None      # view signature the cached still was rendered for
-    hq_image = None    # cached pane-sized anti-aliased still
-    still_frames = 0   # consecutive frames with an unchanged view
-
-    # Ground plane geometry (view space): a fixed stage below the model's
-    # reach at any rotation, wide enough that shadows always land on it
-    model_radius = 0.5 * ((max(xs) - min(xs)) ** 2 +
-                          (max(ys) - min(ys)) ** 2 +
-                          (max(zs) - min(zs)) ** 2) ** 0.5
-    floor_y = model_radius * 1.05
-    floor_half = model_radius * 4.0
-
-    def project_view_point(p):
-        """View space -> pane screen coordinates (same camera projection
-        the vertex pipeline applies)."""
-        ppu = state.camera.pixels_per_unit
-        return (vp.center_x + p[0] / p[2] * ppu,
-                vp.center_y + p[1] / p[2] * ppu)
-
-    # Rendering resources
     clock = pygame.time.Clock()
     font = pygame.font.Font(None, 36)
     help_font = pygame.font.Font(None, 28)
     fps_update_timer = 0
+    current_fps = 0.0
     fps_text = font.render('FPS: 0.0', True, COLOR_BLACK)
 
     help_text = [
@@ -149,396 +82,268 @@ def start():
         'q - Quit'
     ]
 
+    # Model constants
+    center_offset = the_mesh.center_offset()
+    MC = matrix.TranslateMatrix(*center_offset)
+    model_radius = the_mesh.bounding_radius()
+    floor_y = model_radius * 1.05
+    floor_half = model_radius * 4.0
+
+    # Fragment-pipeline buffers per SSAA scale (surfarray layout (W, H, 3))
+    buffers = {}
+    for k in {SSAA_INTERACTIVE, SSAA_STILL}:
+        w, h = int(vp.width * k), int(vp.height * k)
+        buffers[k] = (pygame.Surface((w, h)), np.empty((w, h, 3), dtype=np.uint8))
+
+    # Adaptive-quality state for the filled modes
+    hq_sig = None       # view signature the cached still was rendered for
+    hq_image = None     # cached pane-sized anti-aliased frame
+    hq_faces = 0        # face count shown while the cache is displayed
+    still_frames = 0
+    shadow_cache_sig = None
+    shadow_cache_map = None
+
     while True:
-        # Update continuous rotations
         state.update_continuous_rotations()
         screen.fill(COLOR_WHITE)
 
-        # Handle input events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 sys.exit()
-
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q:
                     sys.exit()
-
                 input_handler.handle_keydown(event.key)
 
-        # Compute transformations: model (scale·rotate·translate) composed
-        # with the camera's view matrix, so view space has the camera at the
-        # origin looking toward +z.
+        # --- Transform stage: whole mesh in a few matmuls -----------------
         MS = matrix.ScaleMatrix(*state.scale)
         MR = matrix.RotateMatrix(*state.rotation)
         MT = matrix.TranslateMatrix(*state.translation)
-        MV = matrix.MatrixMult(MC, MS)
-        MV = matrix.MatrixMult(MV, MR)
-        MV = matrix.MatrixMult(MV, MT)
-        MV = matrix.MatrixMult(MV, state.camera.view_matrix())
-        P = state.camera.projection_matrix()
+        MV = MC @ MS @ MR @ MT @ state.camera.view_matrix()
 
-        # Transform vertices: world -> view -> perspective divide -> pane
-        for vertex in vertices.vertex_list:
-            vertex.calc_view_coordinates(MV)
-            vertex.calc_screen_coordinates(P, state.camera, vp)
+        view_pts = matrix.transform_points(the_mesh.vertices, MV)
+        face_normals = matrix.transform_directions(the_mesh.face_normals, MR)
+        screen_pts, clipped = state.camera.project(view_pts, vp)
 
-        # View-space normals, needed for facing tests in hidden-line and solid
-        # modes and for the optional wireframe backface cull. Rotation
-        # preserves unit length, so these stay normalised.
-        transformed_normals = None
-        if state.draw_faces and (state.render_mode != 'wireframe' or state.backface_cull):
-            transformed_normals = [matrix.MatrixVector(MR, face.normal)
-                                   for face in surfaces.surface_list]
+        faces = the_mesh.faces
+        centroids = view_pts[faces].mean(axis=1)
+        facing = -np.einsum('ij,ij->i', face_normals, centroids)
+        face_clipped = clipped[faces].any(axis=1)
 
-        # Clip all geometry drawing to the viewport pane. Pygame clips at the
-        # pixel level, so faces straddling the pane edge are partially drawn
-        # (no gaps) and nothing renders outside the pane.
+        mode = state.render_mode
+        displayed_faces = 0
+
         screen.set_clip(pygame.Rect(vp.x, vp.y, vp.width, vp.height))
 
-        # Draw faces
-        if state.draw_faces:
-            vlist = vertices.vertex_list
+        if state.draw_faces and mode == 'wireframe':
+            ok = ~face_clipped
+            if state.backface_cull:
+                ok &= facing > 0
+            depths = centroids[:, 2]
+            visible_z = view_pts[~clipped, 2]
+            if visible_z.size:
+                z_lo, z_hi = visible_z.min(), visible_z.max()
+                span = max(z_hi - z_lo, 1e-9)
+                cues = (190 * (depths - z_lo) / span).astype(np.int64).clip(0, 255)
+                tri_screen = screen_pts[faces]
+                for i in np.nonzero(ok)[0]:
+                    c = int(cues[i])
+                    pygame.draw.aalines(screen, (c, c, c), True, tri_screen[i])
+                displayed_faces = int(ok.sum())
 
-            # Depth range for depth cueing: near edges draw black, far edges
-            # fade toward light grey
-            z_lo = None
-            z_hi = None
-            for vtx in vlist:
-                if vtx.clipped:
-                    continue
-                z = vtx.z_view
-                if z_lo is None or z < z_lo:
-                    z_lo = z
-                if z_hi is None or z > z_hi:
-                    z_hi = z
-            z_span = (z_hi - z_lo) if (z_lo is not None and z_hi > z_lo) else 1.0
+        elif state.draw_faces and mode == 'hidden-line':
+            # Painter's algorithm is still the right tool for line art
+            ok = np.nonzero(~face_clipped & (facing > 0))[0]
+            order = ok[np.argsort(-centroids[ok, 2])]
+            visible_z = view_pts[~clipped, 2]
+            if visible_z.size:
+                z_lo = visible_z.min()
+                span = max(visible_z.max() - z_lo, 1e-9)
+                tri_screen = screen_pts[faces]
+                for i in order:
+                    c = int(190 * (centroids[i, 2] - z_lo) / span)
+                    pts = tri_screen[i]
+                    pygame.draw.polygon(screen, COLOR_WHITE, pts, 0)
+                    pygame.draw.aalines(screen, (c, c, c), True, pts)
+                displayed_faces = len(order)
 
-            if z_lo is None:
-                pass  # everything clipped, nothing to draw
-
-            elif state.render_mode == 'wireframe':
-                for face_idx, face in enumerate(surfaces.surface_list):
-                    va = vlist[face.vertex_list[0] - 1]
-                    vb = vlist[face.vertex_list[1] - 1]
-                    vc = vlist[face.vertex_list[2] - 1]
-                    if va.clipped or vb.clipped or vc.clipped:
-                        continue
-
-                    # Backface culling (optional): back-facing when the normal
-                    # points away from the camera at the view-space origin
-                    if state.backface_cull:
-                        n = transformed_normals[face_idx]
-                        if (n[0] * va.x_view + n[1] * va.y_view + n[2] * va.z_view) > 0:
-                            continue
-
-                    depth = (va.z_view + vb.z_view + vc.z_view) / 3.0
-                    cue = int(190 * (depth - z_lo) / z_span)
-                    pygame.draw.aalines(screen, (cue, cue, cue), True,
-                                        ((va.x_screen, va.y_screen),
-                                         (vb.x_screen, vb.y_screen),
-                                         (vc.x_screen, vc.y_screen)))
-
+        elif state.draw_faces:
+            # --- Fragment pipeline: solid / gouraud / phong ---------------
+            # Adaptive quality: fast interactive render while the view moves,
+            # one cached supersampled frame once it settles
+            view_sig = (tuple(state.rotation), tuple(state.translation),
+                        tuple(state.scale), state.camera.distance, mode,
+                        state.show_shadows)
+            if view_sig != hq_sig:
+                hq_sig = view_sig
+                hq_image = None
+                still_frames = 0
             else:
-                # Painter's algorithm for all filled modes: collect
-                # front-facing faces, then draw far-to-near so nearer faces
-                # paint over further ones.
-                mode = state.render_mode
+                still_frames += 1
 
-                # Gouraud/Phong: track whether the view changed; a cached
-                # anti-aliased still short-circuits the whole frame build
-                if mode in ('gouraud', 'phong'):
-                    view_sig = (tuple(state.rotation), tuple(state.translation),
-                                tuple(state.scale), state.camera.distance, mode,
-                                state.show_shadows)
-                    if view_sig != hq_sig:
-                        hq_sig = view_sig
-                        hq_image = None
-                        still_frames = 0
-                    else:
-                        still_frames += 1
-                use_cached_still = (mode in ('gouraud', 'phong')
-                                    and hq_image is not None)
+            if hq_image is not None:
+                screen.blit(hq_image, (vp.x, vp.y))
+                displayed_faces = hq_faces
+            else:
+                ssaa = (SSAA_STILL if still_frames >= STILL_FRAMES_FOR_HQ
+                        else SSAA_INTERACTIVE)
+                buf_surface, frame = buffers[ssaa]
+                buf_w, buf_h = frame.shape[0], frame.shape[1]
 
-                # Ground plane + planar projected shadows (filled modes).
-                # The floor is a stage fixed in view space; each light-facing
-                # model face is projected along the light onto it.
-                draw_floor = mode != 'hidden-line' and not use_cached_still
-                floor_pts = None
-                floor_col = shadow_col = None
-                shadow_polys = []
-                collect_shadows = draw_floor and state.show_shadows
-                if draw_floor:
-                    D = state.camera.distance
-                    zf_near = max(state.camera.near + 0.2, D - floor_half)
-                    zf_far = D + floor_half
-                    floor_pts = tuple(project_view_point(p) for p in
-                                      ((-floor_half, floor_y, zf_near),
-                                       (floor_half, floor_y, zf_near),
-                                       (floor_half, floor_y, zf_far),
-                                       (-floor_half, floor_y, zf_far)))
-                    # Flat-lit floor: ambient + diffuse at its up-facing
-                    # normal (specular omitted - one colour for the quad)
-                    fbase, _ = light.phong_intensity((0.0, -1.0, 0.0),
-                                                     (0.0, floor_y, D),
-                                                     state.light)
-                    floor_col = tuple(int(c * fbase) for c in FLOOR_BASE_COLOR)
-                    shadow_col = tuple(int(c * SHADOW_DARKEN) for c in floor_col)
+                # Scene = model + floor geometry (the floor occludes and
+                # receives shadows like everything else)
+                D = state.camera.distance
+                floor = mesh_module.floor_mesh(floor_y, floor_half, D,
+                                               z_near=state.camera.near + 0.2)
+                n_model = len(view_pts)
+                floor_screen, floor_clipped = state.camera.project(
+                    floor.vertices, vp)
 
-                # Smooth shading needs per-vertex view-space normals; Gouraud
-                # additionally lights every vertex once, up front
-                if mode in ('gouraud', 'phong') and not use_cached_still:
-                    view_normals = [matrix.MatrixVector(MR, vtx.normal)
-                                    for vtx in vlist]
-                if mode == 'gouraud' and not use_cached_still:
-                    vertex_colors = [light.phong_shade(
-                                         view_normals[i],
-                                         (vtx.x_view, vtx.y_view, vtx.z_view),
-                                         state.light)
-                                     for i, vtx in enumerate(vlist)]
+                scene_view = np.vstack([view_pts, floor.vertices])
+                scene_screen = np.vstack([screen_pts, floor_screen])
+                scene_clipped = np.concatenate([clipped, floor_clipped])
+                scene_faces = np.vstack([faces, floor.faces + n_model])
+                scene_fnormals = np.vstack([face_normals, floor.face_normals])
+                scene_vnormals = np.vstack([
+                    matrix.transform_directions(the_mesh.vertex_normals, MR),
+                    floor.vertex_normals])
+                scene_centroids = scene_view[scene_faces].mean(axis=1)
+                scene_facing = -np.einsum('ij,ij->i', scene_fnormals,
+                                          scene_centroids)
 
-                render_list = []
-                for face_idx, face in ([] if use_cached_still
-                                       else enumerate(surfaces.surface_list)):
-                    i1 = face.vertex_list[0] - 1
-                    i2 = face.vertex_list[1] - 1
-                    i3 = face.vertex_list[2] - 1
-                    va, vb, vc = vlist[i1], vlist[i2], vlist[i3]
-                    if va.clipped or vb.clipped or vc.clipped:
-                        continue
+                ok = (~scene_clipped[scene_faces].any(axis=1)) & (scene_facing > 0)
+                draw_faces_arr = scene_faces[ok]
+                displayed_faces = len(draw_faces_arr)
 
-                    n = transformed_normals[face_idx]
+                buf_pts = (scene_screen - (vp.x, vp.y)) * ssaa
+                frags = render.rasterize(buf_pts, scene_view[:, 2],
+                                         draw_faces_arr, buf_w, buf_h)
 
-                    # Cast a shadow if the face faces the LIGHT (independent
-                    # of whether the camera sees it)
-                    if collect_shadows:
-                        tl = state.light.to_light
-                        if n[0] * tl[0] + n[1] * tl[1] + n[2] * tl[2] > 0:
-                            sp = []
-                            for pv in ((va.x_view, va.y_view, va.z_view),
-                                       (vb.x_view, vb.y_view, vb.z_view),
-                                       (vc.x_view, vc.y_view, vc.z_view)):
-                                q = shadow.project_to_floor(pv, state.light,
-                                                            floor_y)
-                                if q is None or q[2] <= state.camera.near:
-                                    sp = None
-                                    break
-                                sp.append(project_view_point(q))
-                            if sp:
-                                shadow_polys.append(sp)
+                # Shadow map from the model only (the floor receives, the
+                # model self-shadows), cached while the pose is unchanged.
+                # Interactive frames use a smaller map (soft edges are
+                # invisible at half res); stills get the full-size one.
+                shadow_map = None
+                if state.show_shadows and len(frags['x']):
+                    map_size = 256 if ssaa == SSAA_STILL else 128
+                    pose_sig = view_sig[:4] + (map_size,)
+                    if pose_sig != shadow_cache_sig:
+                        shadow_cache_map = shadow.build_shadow_map(
+                            view_pts, faces, state.light, size=map_size)
+                        shadow_cache_sig = pose_sig
+                    shadow_map = shadow_cache_map
 
-                    cx = (va.x_view + vb.x_view + vc.x_view) / 3.0
-                    cy = (va.y_view + vb.y_view + vc.y_view) / 3.0
-                    cz = (va.z_view + vb.z_view + vc.z_view) / 3.0
-                    facing = -(n[0] * cx + n[1] * cy + n[2] * cz)
-                    if facing <= 0:
-                        continue
+                # Material ratio that turns lit silver into lit floor grey
+                floor_ratio = (np.asarray(FLOOR_BASE_COLOR, dtype=np.float64)
+                               / np.asarray(light.MATERIAL_BASE_COLOR,
+                                            dtype=np.float64))
 
-                    pts = ((va.x_screen, va.y_screen),
-                           (vb.x_screen, vb.y_screen),
-                           (vc.x_screen, vc.y_screen))
-                    if mode == 'hidden-line':
-                        shade = int(190 * (cz - z_lo) / z_span)  # edge depth cue
-                        payload = (shade, shade, shade)
-                    elif mode == 'solid':
-                        # Flat shading: one lighting evaluation per face
-                        payload = light.phong_shade(n, (cx, cy, cz), state.light)
+                frame[:] = 255
+                if len(frags['x']):
+                    frag_face_rows = frags['face']  # index into draw_faces_arr
+
+                    if mode == 'solid':
+                        # Flat: light per FACE, shadow per face centroid
+                        kept_centroids = scene_centroids[ok]
+                        f_shadowed = (shadow_map.is_shadowed_batch(kept_centroids)
+                                      if shadow_map is not None else None)
+                        face_colors = light.phong_shade_batch(
+                            scene_fnormals[ok], kept_centroids, state.light,
+                            shadowed=f_shadowed).astype(np.float64)
+                        floor_face = np.nonzero(ok)[0] >= len(faces)
+                        face_colors[floor_face] *= floor_ratio
+                        colors = face_colors[frag_face_rows].clip(0, 255) \
+                                                            .astype(np.uint8)
+
                     elif mode == 'gouraud':
-                        payload = (i1, i2, i3)  # colours resolved at draw time
-                    else:  # phong
-                        payload = ((view_normals[i1], view_normals[i2],
-                                    view_normals[i3]),
-                                   ((va.x_view, va.y_view, va.z_view),
-                                    (vb.x_view, vb.y_view, vb.z_view),
-                                    (vc.x_view, vc.y_view, vc.z_view)))
-                    render_list.append((cz, payload, pts))
+                        # Light and shadow per VERTEX, interpolate colours
+                        v_shadowed = (shadow_map.is_shadowed_batch(scene_view)
+                                      if shadow_map is not None else None)
+                        vcolors = light.phong_shade_batch(
+                            scene_vnormals, scene_view, state.light,
+                            shadowed=v_shadowed).astype(np.float64)
+                        vcolors[n_model:] *= floor_ratio
+                        colors = render.interpolate(frags, draw_faces_arr,
+                                                    vcolors) \
+                                       .clip(0, 255).astype(np.uint8)
 
-                render_list.sort(key=lambda t: -t[0])  # far first
+                    else:  # phong: everything per FRAGMENT
+                        # One fused gather for positions + normals
+                        attrs = render.interpolate(
+                            frags, draw_faces_arr,
+                            np.hstack([scene_view, scene_vnormals]))
+                        frag_pos = attrs[:, :3]
+                        frag_norm = attrs[:, 3:]
+                        lens = np.linalg.norm(frag_norm, axis=1, keepdims=True)
+                        lens[lens < 1e-12] = 1.0
+                        frag_norm /= lens
+                        shadowed = (shadow_map.is_shadowed_batch(frag_pos)
+                                    if shadow_map is not None else None)
+                        colors = light.phong_shade_batch(
+                            frag_norm, frag_pos, state.light,
+                            shadowed=shadowed).astype(np.float64)
+                        floor_frag = (np.nonzero(ok)[0][frag_face_rows]
+                                      >= len(faces))
+                        colors[floor_frag] *= floor_ratio
+                        colors = colors.clip(0, 255).astype(np.uint8)
 
-                if mode == 'hidden-line':
-                    # Fill with background to erase edges behind, then outline
-                    # with the depth-cued colour (antialiased)
-                    for depth, colr, pts in render_list:
-                        pygame.draw.polygon(screen, COLOR_WHITE, pts, 0)
-                        pygame.draw.aalines(screen, colr, True, pts)
-                elif mode == 'solid':
-                    if SOLID_SSAA > 1:
-                        # Supersample: fill at SSAA x pane resolution, then
-                        # smooth-downscale into the pane for anti-aliasing
-                        buf = solid_buffer
-                        buf.fill(COLOR_WHITE)
-                        ss = SOLID_SSAA
-                        to_buf = lambda p: ((p[0] - vp.x) * ss, (p[1] - vp.y) * ss)
-                        pygame.draw.polygon(buf, floor_col,
-                                            [to_buf(p) for p in floor_pts], 0)
-                        for sp in shadow_polys:
-                            pygame.draw.polygon(buf, shadow_col,
-                                                [to_buf(p) for p in sp], 0)
-                        for depth, colr, pts in render_list:
-                            pygame.draw.polygon(buf, colr,
-                                                [to_buf(p) for p in pts], 0)
-                        screen.blit(pygame.transform.smoothscale(
-                            buf, (vp.width, vp.height)), (vp.x, vp.y))
-                    else:
-                        pygame.draw.polygon(screen, floor_col, floor_pts, 0)
-                        for sp in shadow_polys:
-                            pygame.draw.polygon(screen, shadow_col, sp, 0)
-                        for depth, colr, pts in render_list:
-                            pygame.draw.polygon(screen, colr, pts, 0)
+                    frame[frags['x'], frags['y']] = colors
+
+                pygame.surfarray.blit_array(buf_surface, frame)
+                if ssaa != 1:
+                    pane = pygame.transform.smoothscale(
+                        buf_surface, (vp.width, vp.height))
                 else:
-                    # Gouraud/Phong rasterise per pixel in pure Python. While
-                    # the view is changing they use the reduced-resolution
-                    # buffer for interactivity; once still, one supersampled
-                    # anti-aliased frame is rendered and cached (see the
-                    # SSAA_STILL / STILL_FRAMES_FOR_HQ constants).
-                    if use_cached_still:
-                        screen.blit(hq_image, (vp.x, vp.y))
-                    else:
-                        if still_frames >= STILL_FRAMES_FOR_HQ:
-                            buf = hq_buffer
-                            pt_scale = float(SSAA_STILL)
-                            print(f'rendering anti-aliased {mode} still ...')
-                        else:
-                            buf = raster_buffer
-                            pt_scale = 1.0 / RENDER_SCALE
+                    pane = buf_surface
+                if ssaa == SSAA_STILL:
+                    hq_image = pane.copy()
+                    hq_faces = displayed_faces
+                screen.blit(pane, (vp.x, vp.y))
 
-                        # The rasteriser writes pixels directly (set_at
-                        # ignores the clip rect), so it gets bounds explicitly
-                        buf.fill(COLOR_WHITE)
-                        bounds = (0, 0, buf.get_width() - 1, buf.get_height() - 1)
-
-                        # Floor + planar shadows first (they are always
-                        # behind/below the model)
-                        to_buf = lambda p: ((p[0] - vp.x) * pt_scale,
-                                            (p[1] - vp.y) * pt_scale)
-                        pygame.draw.polygon(buf, floor_col,
-                                            [to_buf(p) for p in floor_pts], 0)
-                        for sp in shadow_polys:
-                            pygame.draw.polygon(buf, shadow_col,
-                                                [to_buf(p) for p in sp], 0)
-
-                        # Self-shadowing (shadow map) for the HQ still only
-                        shadow_map = None
-                        if buf is hq_buffer and state.show_shadows:
-                            view_points = [(vtx.x_view, vtx.y_view, vtx.z_view)
-                                           for vtx in vlist]
-                            face_triples = [(f.vertex_list[0] - 1,
-                                             f.vertex_list[1] - 1,
-                                             f.vertex_list[2] - 1)
-                                            for f in surfaces.surface_list]
-                            shadow_map = shadow.build_shadow_map(
-                                view_points, face_triples, state.light)
-
-                        if mode == 'gouraud':
-                            if shadow_map is not None:
-                                # Re-light shadowed vertices with ambient only
-                                amb = light.ambient_shade(state.light)
-                                vertex_colors = [
-                                    amb if shadow_map.is_shadowed(
-                                        (vtx.x_view, vtx.y_view, vtx.z_view))
-                                    else vertex_colors[i]
-                                    for i, vtx in enumerate(vlist)]
-                            for depth, (i1, i2, i3), pts in render_list:
-                                bpts = tuple(to_buf(p) for p in pts)
-                                raster.fill_gouraud(
-                                    buf, bpts,
-                                    (vertex_colors[i1], vertex_colors[i2],
-                                     vertex_colors[i3]), bounds)
-                        else:  # phong
-                            phong_step = (1 if buf is hq_buffer
-                                          else PHONG_INTERACTIVE_STEP)
-                            for depth, (normals, view_pts), pts in render_list:
-                                bpts = tuple(to_buf(p) for p in pts)
-                                raster.fill_phong(buf, bpts, normals, view_pts,
-                                                  state.light, bounds,
-                                                  step=phong_step,
-                                                  shadow=shadow_map)
-
-                        scaled = pygame.transform.smoothscale(
-                            buf, (vp.width, vp.height))
-                        if buf is hq_buffer:
-                            hq_image = scaled
-                            print('... done')
-                        screen.blit(scaled, (vp.x, vp.y))
-
-        # Draw vertex normals (clip rect trims any that cross the pane edge)
+        # Vertex normal overlay
         if state.draw_normals:
-            for vertex in vertices.vertex_list:
-                if not vertex.normal or vertex.clipped:
-                    continue
-                x1, y1 = vertex.x_screen, vertex.y_screen
-                x2 = x1 - vertex.normal[0] * 10
-                y2 = y1 - vertex.normal[1] * 10
-                pygame.draw.line(screen, COLOR_RED, [x1, y1], [x2, y2], 1)
+            vnorm = matrix.transform_directions(the_mesh.vertex_normals, MR)
+            show = ~clipped
+            starts = screen_pts[show]
+            ends = starts - vnorm[show][:, :2] * 10.0
+            for (x1, y1), (x2, y2) in zip(starts, ends):
+                pygame.draw.line(screen, COLOR_RED, (x1, y1), (x2, y2), 1)
 
-        # Draw axis legend (fixed in viewport top-left corner)
+        # Axis legend (fixed in viewport top-left corner)
         if state.draw_axes:
-            # Draw at fixed position in viewport (top-left + offset)
-            tx = vp.x + 20
-            ty = vp.y + 20
-            axis_len = 80
-            pygame.draw.line(screen, COLOR_GREEN, [tx, ty], [tx + axis_len, ty], 2)
-            pygame.draw.line(screen, COLOR_BLUE, [tx, ty], [tx, ty + axis_len], 2)
+            tx, ty = vp.x + 20, vp.y + 20
+            pygame.draw.line(screen, COLOR_GREEN, [tx, ty], [tx + 80, ty], 2)
+            pygame.draw.line(screen, COLOR_BLUE, [tx, ty], [tx, ty + 80], 2)
             pygame.draw.line(screen, COLOR_MAGENTA, [tx, ty], [tx + 60, ty + 60], 2)
 
-        # Geometry drawing done - remove clip so frame and HUD draw normally
         screen.set_clip(None)
-
-        # Draw viewport frame
         vp.draw_frame(screen, color=COLOR_BLACK, thickness=2)
 
-        # Draw FPS counter and geometry stats
+        # HUD
         fps_update_timer += 1
         if fps_update_timer >= 10:
             current_fps = clock.get_fps()
-
-            # Visibility is only needed for these stats, so compute it here
-            # (every 10th frame) rather than per-vertex in the hot transform loop.
-            in_pane = [vp.x_min <= vtx.x_screen <= vp.x_max and
-                       vp.y_min <= vtx.y_screen <= vp.y_max
-                       for vtx in vertices.vertex_list]
-
-            displayed_vertices = sum(in_pane) if state.draw_faces else 0
-            displayed_faces = 0
-            displayed_edges = 0
-
-            if state.draw_faces:
-                for face_idx, face in enumerate(surfaces.surface_list):
-                    va = vertices.vertex_list[face.vertex_list[0] - 1]
-                    if state.backface_cull and state.render_mode == 'wireframe':
-                        n = transformed_normals[face_idx]
-                        if (n[0] * va.x_view + n[1] * va.y_view + n[2] * va.z_view) > 0:
-                            continue
-
-                    # A face is displayed if any vertex is in the pane
-                    # (edge-straddling faces are partially drawn by the clip rect)
-                    if (in_pane[face.vertex_list[0] - 1] or
-                        in_pane[face.vertex_list[1] - 1] or
-                        in_pane[face.vertex_list[2] - 1]):
-                        displayed_faces += 1
-                        displayed_edges += 3  # Each triangle has 3 edges
-
-            displayed_normals = 0
-            if state.draw_normals:
-                displayed_normals = sum(1 for i, vtx in enumerate(vertices.vertex_list)
-                                        if in_pane[i] and vtx.normal)
-            if state.draw_faces:
-                displayed_normals += displayed_faces  # Add face normals
-
+            in_pane = (~clipped
+                       & (screen_pts[:, 0] >= vp.x_min)
+                       & (screen_pts[:, 0] <= vp.x_max)
+                       & (screen_pts[:, 1] >= vp.y_min)
+                       & (screen_pts[:, 1] <= vp.y_max))
+            displayed_vertices = int(in_pane.sum()) if state.draw_faces else 0
+            shown_faces = displayed_faces if state.draw_faces else 0
             status_line = (
                 f'{current_fps:.0f} FPS  '
-                f'Vertices:{displayed_vertices}  Edges:{displayed_edges}  Faces:{displayed_faces}  Normals:{displayed_normals}'
+                f'Vertices:{displayed_vertices}  Edges:{shown_faces * 3}  '
+                f'Faces:{shown_faces}  Normals:{shown_faces}'
             )
-            clipped_count = sum(1 for vtx in vertices.vertex_list if vtx.clipped)
+            clipped_count = int(clipped.sum())
             if clipped_count:
                 status_line += f'  Clipped:{clipped_count}'
             status_line += f'  [{state.render_mode}]'
-
             fps_text = font.render(status_line, True, COLOR_BLACK)
             fps_update_timer = 0
 
         screen.blit(fps_text, (10, 10))
 
-        # Draw help overlay
         if state.show_help:
             help_y = 60
             for line in help_text:
@@ -553,33 +358,12 @@ def start():
 if __name__ == '__main__':
 
     if INPUT_DATA_SOURCE == 'db':
-
-        print("loading vertices from database ...")
-        vertices = loader.load_vertices_api()
-        print('... done')
-
-        print("loading surfaces from database ...")
-        surfaces = loader.load_surfaces_api()
-        print('... done')
-
-    elif INPUT_DATA_SOURCE == 'file':
-
-        print("loading vertices from file ...")
-        vertices = loader.load_vertices_file()
-        print('... done')
-
-        print("loading surfaces from file ...")
-        surfaces = loader.load_surfaces_file()
-        print('... done')
-
-    print('validating surfaces ...')
-    validate_surfaces(surfaces, vertices.vertex_count())
-    print('... done')
-
-    print('computing surface normals ...')
-    loader.compute_surface_normals(surfaces, vertices)
-    loader.compute_vertex_normals(surfaces, vertices)
-    print('... done')
+        print("loading mesh from database ...")
+        the_mesh = loader.load_mesh_api()
+    else:
+        print("loading mesh from file ...")
+        the_mesh = loader.load_mesh_file()
+    print(f'... done: {the_mesh}')
 
     print('starting render mode ...')
     start()
