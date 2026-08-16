@@ -26,7 +26,7 @@ class ViewerState:
         self.normals_calculated = False
         self.draw_faces = True
         self.draw_axes = True
-        self.backface_cull = False
+        self.backface_cull = False  # Disabled by default (costs 4.9 FPS, wireframe shows both sides)
         self.show_help = False
 
         # Continuous rotation state

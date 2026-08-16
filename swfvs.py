@@ -132,9 +132,9 @@ def start():
             vertex.calc_view_coordinates(M)
             vertex.calc_screen_coordinates(MP)
 
-        # Cache transformed normals for culling (computed once, used twice)
+        # Cache transformed normals for culling (computed only if drawing)
         transformed_normals = {}
-        if state.backface_cull:
+        if state.draw_faces and state.backface_cull:
             for idx, face in enumerate(surfaces.surface_list):
                 transformed_normals[idx] = matrix.MatrixVector(MR, face.normal)
 
