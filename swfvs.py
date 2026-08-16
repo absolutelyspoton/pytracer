@@ -168,22 +168,35 @@ def start():
             pygame.draw.line(screen, COLOR_BLUE, [tx, ty], [tx, ty + 200], 3)
             pygame.draw.line(screen, COLOR_MAGENTA, [tx, ty], [tx + 175, ty + 175], 3)
 
-        # Draw FPS counter and status
+        # Draw FPS counter and geometry stats
         fps_update_timer += 1
         if fps_update_timer >= 10:
             current_fps = clock.get_fps()
 
-            # Build status string
-            faces_status = 'Faces' if state.draw_faces else 'no faces'
-            normals_status = 'Normals' if state.draw_normals else 'no normals'
-            axes_status = 'Axes' if state.draw_axes else 'no axes'
-            cull_status = 'Cull' if state.backface_cull else 'no cull'
+            # Count displayed geometry
+            displayed_vertices = vertices.vertex_count() if state.draw_faces else 0
+            displayed_faces = 0
+            displayed_edges = 0
 
-            vertex_count = vertices.vertex_count()
-            face_count = surfaces.surface_count()
+            if state.draw_faces:
+                for face in surfaces.surface_list:
+                    # Apply backface culling logic
+                    if state.backface_cull:
+                        normal_view = matrix.MatrixVector(MR, face.normal)
+                        if normal_view[2] < 0:
+                            continue
+                    displayed_faces += 1
+                    displayed_edges += 3  # Each triangle has 3 edges
+
+            displayed_normals = 0
+            if state.draw_normals:
+                displayed_normals = vertices.vertex_count()  # Only vertex normals are drawn
+            if state.draw_faces:
+                displayed_normals += displayed_faces  # Add face normals
 
             status_line = (
-                f'{current_fps:.0f} FPS  {faces_status}  {normals_status}  {axes_status}  {cull_status}  V:{vertex_count} F:{face_count}'
+                f'{current_fps:.0f} FPS  '
+                f'Vertices:{displayed_vertices}  Edges:{displayed_edges}  Faces:{displayed_faces}  Normals:{displayed_normals}'
             )
 
             fps_text = font.render(status_line, True, COLOR_BLACK)
