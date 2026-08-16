@@ -1,60 +1,53 @@
 # Author: Dominic Williams
 # Date created: 10 Aug 2022
-# This code defines two classes, vertex and vertices, for modeling and storing information about 
-# 3D vertices. The vertex class contains various attributes for storing information about a 
-# single vertex, such as its world and screen coordinates. The vertices class is a container 
-# for a list of vertex objects, and contains methods for adding new vertices to the list and 
-# getting the number of vertices in the list
+# vertex: 3D vertex with world/view/screen coordinates
+# vertices: Container for vertex collection
 
-# Classes for modelling vertices
-
-from pydantic import BaseModel, Field
-from typing import List, Optional
 import matrix
 
-class vertex(BaseModel):
-    x_world: float = 0.0
-    y_world: float = 0.0
-    z_world: float = 0.0
-    x_view: Optional[float] = 0.0
-    y_view: Optional[float] = 0.0
-    z_view: Optional[float] = 0.0
-    x_screen: Optional[float] = 0.0
-    y_screen: Optional[float] = 0.0
-    z_screen: Optional[float] = 0.0
-    index: Optional[int] = 0
-    normal: Optional[List] = Field(default_factory=list)
+class vertex:
+    __slots__ = ['x_world', 'y_world', 'z_world',
+                 'x_view', 'y_view', 'z_view',
+                 'x_screen', 'y_screen', 'z_screen',
+                 'index', 'normal']
 
-    # calc linear transform of world coordinates to transformed coordinates, store results
-    def calc_view_coordinates(self,I) -> None:
-        t = matrix.MatrixVector(I,[self.x_world,self.y_world,self.z_world])
-        self.x_view = t[0] 
-        self.y_view = t[1] 
-        self.z_view = t[2] 
-        # s = matrix.MatrixMult(matrix.OrthographicMatrix(),[self.x_view,self.y_view,self.z_view])
+    def __init__(self, x_world=0.0, y_world=0.0, z_world=0.0):
+        self.x_world = x_world
+        self.y_world = y_world
+        self.z_world = z_world
+        self.x_view = 0.0
+        self.y_view = 0.0
+        self.z_view = 0.0
+        self.x_screen = 0.0
+        self.y_screen = 0.0
+        self.z_screen = 0.0
+        self.index = 0
+        self.normal = None
 
-        return None
+    def calc_view_coordinates(self, M) -> None:
+        t = matrix.MatrixVector(M, [self.x_world, self.y_world, self.z_world])
+        self.x_view = t[0]
+        self.y_view = t[1]
+        self.z_view = t[2]
 
-    def calc_screen_coordinates(self,I) -> None:
-        t = matrix.MatrixVector(I,[self.x_view,self.y_view,self.z_view])
-        self.x_screen = t[0] 
-        self.y_screen = t[1] 
-        self.z_screen = t[2] 
+    def calc_screen_coordinates(self, M) -> None:
+        t = matrix.MatrixVector(M, [self.x_view, self.y_view, self.z_view])
+        self.x_screen = t[0]
+        self.y_screen = t[1]
+        self.z_screen = t[2]
 
-        return None
-
-    def calc_normal(self,normal) -> None:
+    def calc_normal(self, normal) -> None:
         self.normal = normal
-        return None
 
-class vertices(BaseModel):
-    vertex_list: List = Field(default_factory=list)
+class vertices:
+    def __init__(self):
+        self.vertex_list = []
 
-    def add_vertex(self,v:vertex):
+    def add_vertex(self, v: vertex):
         self.vertex_list.append(v)
 
     def vertex_count(self):
-        return(len(self.vertex_list))
+        return len(self.vertex_list)
 
 if __name__ == '__main__':
 

@@ -217,7 +217,7 @@ def start():
                 help_y += 30
 
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(0)  # Unlimited FPS (0 means no cap)
 
 
 if __name__ == '__main__':
