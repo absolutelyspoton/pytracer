@@ -65,12 +65,13 @@ class Scene:
         self.cluster_hi = np.array([tri[c].max(axis=(0, 1)) for c in clusters])
 
 
-def intersect(scene, origins, dirs, any_hit=False):
+def intersect(scene, origins, dirs, any_hit=False, progress=None):
     """Batched nearest-hit (or any-hit) intersection.
 
     origins, dirs: (R, 3). Returns dict with 't' (inf = miss), 'face'
     (-1 = miss), 'u', 'v' (barycentric). For any_hit, 't' is any blocking
-    hit's distance (early exit per cluster).
+    hit's distance (early exit per cluster). `progress`, if given, is
+    called with the fraction of rays processed after each chunk.
     """
     R = len(dirs)
     best_t = np.full(R, np.inf)
@@ -140,6 +141,8 @@ def intersect(scene, origins, dirs, any_hit=False):
         best_face[sl] = c_face
         best_u[sl] = c_u
         best_v[sl] = c_v
+        if progress is not None:
+            progress(min(1.0, sl.stop / R))
 
     return {'t': best_t, 'face': best_face, 'u': best_u, 'v': best_v}
 
@@ -163,10 +166,14 @@ def _hit_normals(scene, hit, dirs):
 
 
 def render_still(vertices, faces, vertex_normals, face_is_floor,
-                 cam, vp, lt, shadows_on=True, bounces=2, report=None):
+                 cam, vp, lt, shadows_on=True, bounces=2, report=None,
+                 floor_pattern='checker', progress=None):
     """Trace the scene to a (pane_width, pane_height, 3) uint8 image.
 
     All geometry in view space (camera at the origin looking +z).
+    floor_pattern: 'checker' | 'stripes' | 'rings' | 'plain'.
+    `progress`, if given, receives an overall 0..1 fraction as the trace
+    advances (weighted per bounce stage - approximate, for a bar).
     """
     scene = Scene(vertices, faces, vertex_normals, face_is_floor)
     W, H = vp.width, vp.height
@@ -200,10 +207,24 @@ def render_still(vertices, faces, vertex_normals, face_is_floor,
         up = np.clip(-directions[:, 1], 0.0, 1.0)  # view-space y grows down
         return sky_horizon + up[:, None] * (sky_top - sky_horizon)
 
+    # Progress windows: each bounce stage gets a weight (later bounces trace
+    # far fewer rays); within a stage, intersection is ~70%, shadows ~30%
+    stage_w = np.array([1.0, 0.35, 0.12][:bounces + 1])
+    stage_edges = np.concatenate([[0.0], np.cumsum(stage_w) / stage_w.sum()])
+
+    def stage_progress(bounce, lo_frac, hi_frac):
+        if progress is None:
+            return None
+        s0, s1 = stage_edges[bounce], stage_edges[bounce + 1]
+        lo = s0 + (s1 - s0) * lo_frac
+        hi = s0 + (s1 - s0) * hi_frac
+        return lambda f: progress(lo + f * (hi - lo))
+
     for bounce in range(bounces + 1):
         if len(active) == 0:
             break
-        hit = intersect(scene, origins, dirs)
+        hit = intersect(scene, origins, dirs,
+                        progress=stage_progress(bounce, 0.0, 0.7))
         stats.append(f'bounce {bounce}: {len(active)} rays, '
                      f'{int((hit["face"] >= 0).sum())} hits')
 
@@ -224,18 +245,29 @@ def render_still(vertices, faces, vertex_normals, face_is_floor,
         if shadows_on:
             s_orig = p + n * OFFSET
             s_dirs = np.broadcast_to(L, s_orig.shape).copy()
-            s_hit = intersect(scene, s_orig, s_dirs, any_hit=True)
+            s_hit = intersect(scene, s_orig, s_dirs, any_hit=True,
+                              progress=stage_progress(bounce, 0.7, 1.0))
             shadowed = s_hit['face'] >= 0
 
-        # Per-hit material colour: silver model, checkerboard floor
+        # Per-hit material colour: silver model, patterned floor
         is_floor = scene.face_is_floor[sub_hit['face']]
         base_colors = np.broadcast_to(silver, (len(p), 3)).copy()
         if is_floor.any():
             fp = p[is_floor]
-            parity = (np.floor(fp[:, 0] / tile).astype(np.int64)
-                      + np.floor(fp[:, 2] / tile).astype(np.int64)) % 2
-            base_colors[is_floor] = np.where(parity[:, None] == 0,
-                                             checker_light, checker_dark)
+            if floor_pattern == 'plain':
+                base_colors[is_floor] = checker_light
+            else:
+                if floor_pattern == 'stripes':
+                    k = np.floor((fp[:, 0] + fp[:, 2]) / tile)
+                elif floor_pattern == 'rings':
+                    k = np.floor(np.sqrt(fp[:, 0] ** 2 + fp[:, 2] ** 2)
+                                 / tile)
+                else:  # checker
+                    k = (np.floor(fp[:, 0] / tile)
+                         + np.floor(fp[:, 2] / tile))
+                parity = k.astype(np.int64) % 2
+                base_colors[is_floor] = np.where(parity[:, None] == 0,
+                                                 checker_light, checker_dark)
 
         local = light_module.phong_shade_batch(
             n, p, lt, shadowed=shadowed,
@@ -258,6 +290,8 @@ def render_still(vertices, faces, vertex_normals, face_is_floor,
         dirs = d_in - 2.0 * d_dot_n * n_a
         origins = p[alive] + n_a * OFFSET
 
+    if progress is not None:
+        progress(1.0)
     if report:
         report('; '.join(stats))
     return accum.reshape(W, H, 3).clip(0, 255).astype(np.uint8)

@@ -100,6 +100,33 @@ def floor_mesh(floor_y, half_size, z_center, z_near=0.7, divisions=8):
     return Mesh(verts, faces)
 
 
+def make_torus(major=2.2, minor=1.0, seg_u=48, seg_v=24):
+    """Parametric torus: ring of radius `major` in the xz-plane, tube of
+    radius `minor`. seg_u segments around the ring, seg_v around the tube.
+    Wound so face normals point outward from the tube surface."""
+    us = np.arange(seg_u) * (2.0 * np.pi / seg_u)
+    vs = np.arange(seg_v) * (2.0 * np.pi / seg_v)
+    gu, gv = np.meshgrid(us, vs, indexing='ij')
+
+    ring = major + minor * np.cos(gv)
+    verts = np.column_stack([(ring * np.cos(gu)).ravel(),
+                             (minor * np.sin(gv)).ravel(),
+                             (ring * np.sin(gu)).ravel()])
+
+    faces = []
+    for i in range(seg_u):
+        i2 = (i + 1) % seg_u
+        for j in range(seg_v):
+            j2 = (j + 1) % seg_v
+            a = i * seg_v + j
+            b = i2 * seg_v + j
+            c = i2 * seg_v + j2
+            d = i * seg_v + j2
+            faces.append((a, c, b))
+            faces.append((a, d, c))
+    return Mesh(verts, faces)
+
+
 if __name__ == '__main__':
     m = Mesh([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)],
              [(0, 1, 2), (0, 2, 3)])

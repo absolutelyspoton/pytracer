@@ -51,6 +51,7 @@ the_mesh = None  # loaded in __main__
 
 def start():
     """Main render loop using the array-oriented pipeline."""
+    global the_mesh
 
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -80,17 +81,30 @@ def start():
         'f - Toggle faces',
         's - Cycle render: wire/hidden/solid/gouraud/phong/raytrace',
         'd - Toggle shadows',
+        'p - Cycle floor pattern (raytrace)',
+        'o - Object menu',
         'b - Toggle backface culling (wireframe)',
         'h - Toggle this help',
         'q - Quit'
     ]
 
-    # Model constants
-    center_offset = the_mesh.center_offset()
-    MC = matrix.TranslateMatrix(*center_offset)
-    model_radius = the_mesh.bounding_radius()
-    floor_y = model_radius * 1.05
-    floor_half = model_radius * 4.0
+    # Model constants (recomputed whenever the object changes)
+    MC = None
+    model_radius = floor_y = floor_half = 0.0
+
+    def apply_mesh():
+        nonlocal MC, model_radius, floor_y, floor_half
+        MC = matrix.TranslateMatrix(*the_mesh.center_offset())
+        model_radius = the_mesh.bounding_radius()
+        floor_y = model_radius * 1.05
+        floor_half = model_radius * 4.0
+        # Auto-frame: default camera distance scales with the object so
+        # every object opens with similar framing ('c' resets to this too)
+        state.camera.default_distance = model_radius * 1.6
+        state.camera.distance = state.camera.default_distance
+
+    apply_mesh()
+    state.menu_objects = loader.list_objects()
 
     # Fragment-pipeline buffers per SSAA scale (surfarray layout (W, H, 3))
     buffers = {}
@@ -109,6 +123,29 @@ def start():
     while True:
         state.update_continuous_rotations()
         screen.fill(COLOR_WHITE)
+
+        # Object switch requested from the menu
+        if state.requested_object:
+            name = state.requested_object
+            state.requested_object = None
+            if name != state.object_name:
+                print(f'loading object: {name} ...')
+                try:
+                    if INPUT_DATA_SOURCE == 'db':
+                        the_mesh = loader.load_mesh_api(name)
+                    else:
+                        the_mesh = loader.load_mesh_file(name)
+                except Exception as exc:
+                    print(f'... failed: {exc}')
+                else:
+                    state.object_name = name
+                    apply_mesh()
+                    hq_sig = None
+                    hq_image = None
+                    still_frames = 0
+                    shadow_cache_sig = None
+                    shadow_cache_map = None
+                    print(f'... done: {the_mesh}')
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -176,7 +213,8 @@ def start():
             # one cached supersampled frame once it settles
             view_sig = (tuple(state.rotation), tuple(state.translation),
                         tuple(state.scale), state.camera.distance, mode,
-                        state.show_shadows)
+                        state.show_shadows, state.floor_pattern,
+                        state.object_name)
             if view_sig != hq_sig:
                 hq_sig = view_sig
                 hq_image = None
@@ -223,10 +261,39 @@ def start():
                          np.ones(len(floor.faces), bool)])
                     print('ray tracing still ...')
                     rt_t0 = time.perf_counter()
+
+                    # On-screen progress bar; flip + pump keep the window
+                    # responsive during the blocking trace
+                    bar_last = [-10]
+
+                    def trace_progress(frac):
+                        pct = int(frac * 100)
+                        if pct - bar_last[0] < 2 and frac < 1.0:
+                            return
+                        bar_last[0] = pct
+                        bar_w = vp.width - 40
+                        x0 = vp.x + 20
+                        y0 = vp.y + vp.height - 40
+                        pygame.draw.rect(screen, COLOR_WHITE,
+                                         pygame.Rect(x0, y0 - 30, bar_w, 48))
+                        pygame.draw.rect(screen, (70, 70, 70),
+                                         pygame.Rect(x0, y0, bar_w, 16))
+                        pygame.draw.rect(screen, (90, 170, 90),
+                                         pygame.Rect(x0 + 2, y0 + 2,
+                                                     int((bar_w - 4) * frac),
+                                                     12))
+                        screen.blit(help_font.render(
+                            f'ray tracing {pct}%', True, COLOR_BLACK),
+                            (x0, y0 - 26))
+                        pygame.display.flip()
+                        pygame.event.pump()
+
                     img = tracer.render_still(
                         scene_view, scene_faces, scene_vnormals,
                         face_is_floor, state.camera, vp, state.light,
-                        shadows_on=state.show_shadows, report=print)
+                        shadows_on=state.show_shadows, report=print,
+                        floor_pattern=state.floor_pattern,
+                        progress=trace_progress)
                     print(f'... done in {time.perf_counter() - rt_t0:.1f}s')
                     pane = pygame.Surface((vp.width, vp.height))
                     pygame.surfarray.blit_array(pane, img)
@@ -367,7 +434,7 @@ def start():
             clipped_count = int(clipped.sum())
             if clipped_count:
                 status_line += f'  Clipped:{clipped_count}'
-            status_line += f'  [{state.render_mode}]'
+            status_line += f'  [{state.render_mode}|{state.object_name}]'
             fps_text = font.render(status_line, True, COLOR_BLACK)
             fps_update_timer = 0
 
@@ -379,6 +446,18 @@ def start():
                 help_surface = help_font.render(line, True, COLOR_BLACK)
                 screen.blit(help_surface, (10, help_y))
                 help_y += 30
+
+        if state.show_object_menu:
+            menu_y = 60
+            screen.blit(help_font.render(
+                'SELECT OBJECT (1-9; o/esc closes):', True, COLOR_BLACK),
+                (10, menu_y))
+            menu_y += 30
+            for i, name in enumerate(state.menu_objects, start=1):
+                marker = '  <- current' if name == state.object_name else ''
+                screen.blit(help_font.render(f'{i} - {name}{marker}', True,
+                                             COLOR_BLACK), (10, menu_y))
+                menu_y += 30
 
         pygame.display.flip()
         clock.tick(0)  # Unlimited FPS (0 means no cap)

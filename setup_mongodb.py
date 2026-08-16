@@ -223,21 +223,35 @@ def main():
 
     db = client[DATABASE_NAME]
 
-    # Load CSV data
-    print("\n--- Loading Data ---")
-    vertices_data = load_csv_to_list('objects/utah_teapot_vertices_mdb.csv')
-    surfaces_data = load_csv_to_list('objects/utah_teapot_faces_mdb.csv')
-
-    if not vertices_data or not surfaces_data:
-        sys.exit(1)
-
-    # Populate collections
+    # Import every object pair found in objects/ into {name}_vertices /
+    # {name}_surfaces collections (the generic server API serves any
+    # collection, so new objects need no server changes)
     print("\n--- Populating Collections ---")
-    v_success = populate_collection(db, VERTICES_COLLECTION, vertices_data, 'objects/utah_teapot_vertices_mdb.csv')
-    s_success = populate_collection(db, SURFACES_COLLECTION, surfaces_data, 'objects/utah_teapot_faces_mdb.csv')
-
-    if not (v_success and s_success):
+    import glob
+    object_names = sorted(
+        os.path.basename(p)[:-len('_vertices_mdb.csv')]
+        for p in glob.glob('objects/*_vertices_mdb.csv'))
+    if not object_names:
+        print("✗ No *_vertices_mdb.csv files found in objects/")
         sys.exit(1)
+
+    for name in object_names:
+        vfile = f'objects/{name}_vertices_mdb.csv'
+        ffile = f'objects/{name}_faces_mdb.csv'
+        vertices_data = load_csv_to_list(vfile)
+        surfaces_data = load_csv_to_list(ffile)
+        if not vertices_data or not surfaces_data:
+            sys.exit(1)
+        ok = populate_collection(db, f'{name}_vertices', vertices_data, vfile)
+        ok &= populate_collection(db, f'{name}_surfaces', surfaces_data, ffile)
+        # The Utah teapot also fills the legacy unprefixed collections
+        if name == 'utah_teapot':
+            ok &= populate_collection(db, VERTICES_COLLECTION,
+                                      vertices_data, vfile)
+            ok &= populate_collection(db, SURFACES_COLLECTION,
+                                      surfaces_data, ffile)
+        if not ok:
+            sys.exit(1)
 
     # Validate
     if not validate_data(db):

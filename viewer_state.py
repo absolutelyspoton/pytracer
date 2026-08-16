@@ -19,6 +19,7 @@ class ViewerState:
     DOLLY_MULTIPLIER = 1.1
     RENDER_MODES = ['wireframe', 'hidden-line', 'solid', 'gouraud', 'phong',
                     'raytrace']
+    FLOOR_PATTERNS = ['checker', 'stripes', 'rings', 'plain']
 
     def __init__(self, screen_width, screen_height):
         # Model transformations (world units; the model loads at its raw size)
@@ -39,6 +40,13 @@ class ViewerState:
         self.backface_cull = False  # wireframe-only toggle; other modes always cull
         self.render_mode = 'wireframe'  # cycles: wireframe -> hidden-line -> solid
         self.show_shadows = True  # floor shadow + still self-shadowing (filled modes)
+        self.floor_pattern = 'checker'  # ray-traced floor style ('p' cycles)
+
+        # Object selection ('o' opens the menu; swfvs performs the load)
+        self.object_name = 'utah_teapot'
+        self.menu_objects = []       # filled by swfvs from loader.list_objects()
+        self.show_object_menu = False
+        self.requested_object = None
         self.show_help = False
 
         # Continuous rotation state
@@ -76,6 +84,11 @@ class ViewerState:
         i = self.RENDER_MODES.index(self.render_mode)
         self.render_mode = self.RENDER_MODES[(i + 1) % len(self.RENDER_MODES)]
 
+    def cycle_floor_pattern(self):
+        """Advance the ray-traced floor pattern."""
+        i = self.FLOOR_PATTERNS.index(self.floor_pattern)
+        self.floor_pattern = self.FLOOR_PATTERNS[(i + 1) % len(self.FLOOR_PATTERNS)]
+
     def toggle_help(self):
         """Toggle help overlay."""
         self.show_help = not self.show_help
@@ -112,6 +125,18 @@ class InputHandler:
 
     def handle_keydown(self, key):
         """Process a keyboard event."""
+        # Object menu: digits select while it is open
+        if self.state.show_object_menu:
+            if pygame.K_1 <= key <= pygame.K_9:
+                idx = key - pygame.K_1
+                if idx < len(self.state.menu_objects):
+                    self.state.requested_object = self.state.menu_objects[idx]
+                    self.state.show_object_menu = False
+                return
+            if key in (pygame.K_o, pygame.K_ESCAPE):
+                self.state.show_object_menu = False
+                return
+
         if key == pygame.K_c:
             self.state.reset()
             print('center ...')
@@ -173,6 +198,14 @@ class InputHandler:
             self.state.toggle_shadows()
             status = 'on' if self.state.show_shadows else 'off'
             print(f'shadows {status} ...')
+
+        elif key == pygame.K_p:
+            self.state.cycle_floor_pattern()
+            print(f'floor pattern: {self.state.floor_pattern} ...')
+
+        elif key == pygame.K_o:
+            self.state.show_object_menu = True
+            print('object menu ...')
 
         elif key == pygame.K_h:
             self.state.toggle_help()
