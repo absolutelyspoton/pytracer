@@ -1,18 +1,19 @@
 # Author: Dominic Williams
 # Date created: 10 Aug 2022
-# 
-# Simple Wireframe Viewing System using pygame for 2Dgraphical drawing system
+#
+# Simple Wireframe Viewing System using pygame for 2D graphical drawing system
 
 import pygame
 import time
-import loader 
-import matrix 
+import loader
+import matrix
 import sys
 import math
 import surface
 import vertex as v
+import viewer_state
 
-INPUT_DATA_SOURCE = 'file' # 'db' or 'file'
+INPUT_DATA_SOURCE = 'file'  # 'db' or 'file'
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 800
 
@@ -20,25 +21,26 @@ vertices = v.vertices()
 surfaces = surface.surface()
 svmap = []
 
-def CalcVectorNormals():
 
-    # Calc vertex normals from surface normals
+def CalcVectorNormals():
+    """Calculate vertex normals from surface normals."""
     print('calculating vertex normals from surface normals ...')
-    for v in vertices.vertex_list:
+    for vertex in vertices.vertex_list:
         totalvec_x = 0
         totalvec_y = 0
         totalvec_z = 0
         sc = 0
         for s in surfaces.surface_list:
-            if v.index in s.vertex_list:
+            if vertex.index in s.vertex_list:
                 totalvec_x = totalvec_x + s.normal[0]
                 totalvec_y = totalvec_y + s.normal[1]
                 totalvec_z = totalvec_z + s.normal[2]
                 sc += 1
         if sc > 0:
-            v.normal = matrix.NormaliseVector([totalvec_x/sc, totalvec_y/sc, totalvec_z/sc])
+            vertex.normal = matrix.NormaliseVector([totalvec_x/sc, totalvec_y/sc, totalvec_z/sc])
     print('... done')
-    
+
+
 def validate_surfaces(surfaces, vertex_count):
     """Validate that all surface vertex references are within range."""
     for face in surfaces.surface_list:
@@ -49,60 +51,33 @@ def validate_surfaces(surfaces, vertex_count):
                     f"but only {vertex_count} vertices loaded"
                 )
 
-def Toggle(flag):
-    if flag:
-        return False
-    elif not flag:
-        return True
-    else:
-        return True
 
 def start():
+    """Main render loop using encapsulated ViewerState."""
+    # Colors
+    black = (0, 0, 0)
+    white = (255, 255, 255)
+    red = (255, 100, 100)
+    blue = (0, 0, 255)
+    green = (0, 255, 0)
+    magenta = (255, 0, 255)
 
-    x_scalar = 100
-    y_scalar = 100
-    z_scalar = 100
-
-    x_rotation = 0.0
-    y_rotation = 0.0
-    z_rotation = 0.0
-
-    x_translation = SCREEN_WIDTH/2
-    y_translation = SCREEN_HEIGHT/2
-    z_translation = 0
-
-    scale_shift = 1.1
-    rotation_shift = 1.0
-    translation_shift = 15.0
-
-    black = 0, 0, 0
-    white = 255,255,255
-    red = 255,100,100
-    blue = 0,0,255
-    green = 0,255,0
-    magenta = 255,0,255
-
-    x_rotate = False
-    y_rotate = False
-    z_rotate = False
-
+    # Initialize pygame
     pygame.init()
-
     size = SCREEN_WIDTH, SCREEN_HEIGHT
     screen = pygame.display.set_mode(size)
     screen.fill(white)
 
+    # Initialize state and input handler
+    state = viewer_state.ViewerState(SCREEN_WIDTH, SCREEN_HEIGHT)
+    input_handler = viewer_state.InputHandler(state)
+
+    # Rendering resources
     clock = pygame.time.Clock()
     font = pygame.font.Font(None, 36)
+    help_font = pygame.font.Font(None, 28)
     fps_update_timer = 0
     fps_text = font.render('FPS: 0.0', True, black)
-
-    drawnormals = False
-    normals_calculated = False
-    drawfaces = True
-    drawaxes = True
-    backface_cull = False
-    show_help = False
 
     help_text = [
         'KEYBOARD CONTROLS:',
@@ -117,193 +92,83 @@ def start():
         'h - Toggle this help',
         'q - Quit'
     ]
-    help_font = pygame.font.Font(None, 28)
 
-    while 1:
-
-        if x_rotate:
-            x_rotation -=math.radians(25)
-
-        if y_rotate:
-            y_rotation += math.radians(25)
-
-        if z_rotate:
-            z_rotation +=math.radians(25)
-
+    while True:
+        # Update continuous rotations
+        state.update_continuous_rotations()
         screen.fill(white)
 
+        # Handle input events
         for event in pygame.event.get():
-
-            if event.type == pygame.QUIT: 
-
+            if event.type == pygame.QUIT:
                 sys.exit()
-                        
+
             if event.type == pygame.KEYDOWN:
-
                 if event.key == pygame.K_q:
-
                     sys.exit()
 
-                if event.key == pygame.K_c:
-
-                    x_scalar = 100
-                    y_scalar = 100
-                    z_scalar = 100
-
-                    x_rotation = 180.0
-                    y_rotation = 180.0
-                    z_rotation = 0.0
-
-                    x_translation = SCREEN_WIDTH/2
-                    y_translation = SCREEN_HEIGHT/2
-                    z_translation = 0
-
-                if event.key == pygame.K_MINUS:
-
-                    x_scalar = x_scalar / scale_shift
-                    y_scalar = y_scalar / scale_shift
-                    z_scalar = z_scalar / scale_shift
-
-                if event.key == pygame.K_EQUALS:
-
-                    x_scalar = x_scalar * scale_shift
-                    y_scalar = y_scalar * scale_shift
-                    z_scalar = z_scalar * scale_shift
-                    
-                if event.key == pygame.K_a:
-
-                    drawaxes = Toggle(drawaxes)
-
-                if event.key == pygame.K_x:
-
-                    x_rotate = Toggle(x_rotate)
-
-                if event.key == pygame.K_y:
-
-                    y_rotate = Toggle(y_rotate)
-
-                if event.key == pygame.K_z:
-
-                    z_rotate = Toggle(z_rotate)
-                    
-                if event.key == pygame.K_UP:
-
-                    y_translation -= translation_shift
-                
-                if event.key == pygame.K_DOWN:
-
-                    y_translation += translation_shift
-
-                if event.key == pygame.K_LEFT:
-
-                    x_translation -= translation_shift
-
-                if event.key == pygame.K_RIGHT:
-
-                    x_translation += translation_shift
-
+                # Special handling for normals toggle (needs CalcVectorNormals call)
                 if event.key == pygame.K_n or event.key == pygame.K_v:
+                    state.toggle_normals()
+                    status = 'on' if state.draw_normals else 'off'
+                    print(f'vertex normals {status} ...')
+                    if state.draw_normals and not state.normals_calculated:
+                        CalcVectorNormals()
+                        state.normals_calculated = True
+                else:
+                    # All other input to handler
+                    input_handler.handle_keydown(event.key)
 
-                    if drawnormals:
-                        drawnormals = False
-                        print('vertex normals off ...')
-                    else:
-                        drawnormals = True
-                        print('vertex normals on ...')
-                        if not normals_calculated:
-                            CalcVectorNormals()
-                            normals_calculated = True
+        # Compute transformations
+        MS = matrix.ScaleMatrix(*state.scale)
+        MR = matrix.RotateMatrix(*state.rotation)
+        MT = matrix.TranslateMatrix(*state.translation)
+        M = matrix.MatrixMult(matrix.MatrixMult(MS, MR), MT)
 
-                if event.key == pygame.K_f:
-
-                    if drawfaces:
-                        drawfaces = False
-                        print('draw faces off ...')
-                    else:
-                        drawfaces = True
-                        print('draw faces on ...')
-
-                if event.key == pygame.K_b:
-
-                    if backface_cull:
-                        backface_cull = False
-                        print('backface culling off ...')
-                    else:
-                        backface_cull = True
-                        print('backface culling on ...')
-
-                if event.key == pygame.K_h:
-
-                    show_help = not show_help
-                    if show_help:
-                        print('help on ...')
-                    else:
-                        print('help off ...')
-
-                screen.fill(white)
-
-        # Calc linear transforms for scaling, rotation and TODO: translation
-        MS = matrix.ScaleMatrix(x_scalar,y_scalar,z_scalar)
-        MR = matrix.RotateMatrix(x_rotation,y_rotation,z_rotation)
-        MT = matrix.TranslateMatrix(x_translation,y_translation,z_translation)
-        # Combine all three matrices into one
-        M = matrix.MatrixMult(matrix.MatrixMult(MS,MR),MT)
-
-        MO = matrix.OrthographicMatrix()
         MP = matrix.PerspectiveMatrix()
 
-        # Perform linear transforms on all vertices in one go to calc view coords from world coords
+        # Transform vertices
         for vertex in vertices.vertex_list:
             vertex.calc_view_coordinates(M)
             vertex.calc_screen_coordinates(MP)
 
-        if drawfaces:
-
+        # Draw faces
+        if state.draw_faces:
             for face in surfaces.surface_list:
+                v1_idx = face.vertex_list[0] - 1
+                v2_idx = face.vertex_list[1] - 1
+                v3_idx = face.vertex_list[2] - 1
 
-                # Get index to each vertex in the surface ( 3 in this case as polgon is a triangle )
-                vertex_index_1 = face.vertex_list[0] - 1
-                vertex_index_2 = face.vertex_list[1] - 1
-                vertex_index_3 = face.vertex_list[2] - 1
-
-                # Surface normals are pre-computed at load time and cached in face.normal
-                # (no per-frame recalculation needed)
-
-                # Backface culling (optional, can be toggled with 'b' key)
-                # Note: Simple face-normal-based culling works for convex meshes but may miss
-                # surfaces on complex geometry like the teapot handle/spout
-                if backface_cull:
+                # Backface culling (optional)
+                if state.backface_cull:
                     normal_view = matrix.MatrixVector(MR, face.normal)
                     if normal_view[2] < 0:
                         continue
 
-                # view plane transformation (basic TODO: add wiew point and proper perspective view plane transform )
-                # i.e. convert 3 dimensional coordinate onto 2 dimensional view plane ( impl parralel and perspective )
-                p = [(vertices.vertex_list[vertex_index_1].x_screen,
-                    vertices.vertex_list[vertex_index_1].y_screen),
-                    (vertices.vertex_list[vertex_index_2].x_screen,
-                    vertices.vertex_list[vertex_index_2].y_screen),
-                    (vertices.vertex_list[vertex_index_3].x_screen,
-                    vertices.vertex_list[vertex_index_3].y_screen)]
-                pygame.draw.polygon(screen,black,p,1)
+                # Draw triangle
+                p = [
+                    (vertices.vertex_list[v1_idx].x_screen, vertices.vertex_list[v1_idx].y_screen),
+                    (vertices.vertex_list[v2_idx].x_screen, vertices.vertex_list[v2_idx].y_screen),
+                    (vertices.vertex_list[v3_idx].x_screen, vertices.vertex_list[v3_idx].y_screen)
+                ]
+                pygame.draw.polygon(screen, black, p, 1)
 
-        if drawnormals:
-
+        # Draw vertex normals
+        if state.draw_normals:
             for vertex in vertices.vertex_list:
+                x1, y1 = vertex.x_screen, vertex.y_screen
+                x2 = x1 - vertex.normal[0] * 10
+                y2 = y1 - vertex.normal[1] * 10
+                pygame.draw.line(screen, red, [x1, y1], [x2, y2], 1)
 
-                x1 = vertex.x_screen
-                y1 = vertex.y_screen
-                x2 = vertex.x_screen - vertex.normal[0] * 10
-                y2 = vertex.y_screen - vertex.normal[1] * 10
+        # Draw axis legend
+        if state.draw_axes:
+            tx, ty = state.translation[0], state.translation[1]
+            pygame.draw.line(screen, green, [tx, ty], [tx + 200, ty], 3)
+            pygame.draw.line(screen, blue, [tx, ty], [tx, ty + 200], 3)
+            pygame.draw.line(screen, magenta, [tx, ty], [tx + 175, ty + 175], 3)
 
-                pygame.draw.line(screen,red,[x1,y1],[x2,y2],1)
-
-        if drawaxes:
-
-            pygame.draw.line(screen,green,[0+x_translation,0+y_translation],[200+x_translation,0+y_translation],3) # type: ignore
-            pygame.draw.line(screen,blue,[0+x_translation,0+y_translation],[0+x_translation,200+y_translation],3) # type: ignore
-            pygame.draw.line(screen,magenta,[0+x_translation,0+y_translation],[175+x_translation,175+y_translation],3) # type: ignore
-
+        # Draw FPS counter
         fps_update_timer += 1
         if fps_update_timer >= 10:
             current_fps = clock.get_fps()
@@ -312,7 +177,8 @@ def start():
 
         screen.blit(fps_text, (10, 10))
 
-        if show_help:
+        # Draw help overlay
+        if state.show_help:
             help_y = 60
             for line in help_text:
                 help_surface = help_font.render(line, True, black)
@@ -321,7 +187,7 @@ def start():
 
         pygame.display.flip()
         clock.tick(60)
-        screen.fill(white)
+
 
 if __name__ == '__main__':
 
@@ -355,5 +221,3 @@ if __name__ == '__main__':
 
     print('starting render mode ...')
     start()
-
-
