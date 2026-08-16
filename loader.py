@@ -9,6 +9,7 @@ import vertex as V
 import requests
 import json
 import pymongo
+import matrix
 
 DEV_API_ENDPOINT_VERTICES = 'http://127.0.0.1:8000/db/3dObjects/vertices/1'
 DEV_API_ENDPOINT_SURFACES = 'http://127.0.0.1:8000/db/3dObjects/surfaces/1'
@@ -79,12 +80,44 @@ def load_surfaces_api():
     
     return(surfaces)
 
+def compute_surface_normals(surfaces, vertices):
+    """Calculate and cache surface normals from vertex positions.
+
+    Surface normals are mesh-invariant (never change), so they should be
+    computed once at load time, not every frame. This function calculates
+    normals for all surfaces and stores them.
+
+    Args:
+        surfaces: surface collection with faces
+        vertices: vertices collection with world coordinates
+    """
+    print('computing surface normals from vertex positions ...')
+    for face in surfaces.surface_list:
+        # Surface vertex indices are 1-based; convert to 0-based for array access
+        v1_idx = face.vertex_list[0] - 1
+        v2_idx = face.vertex_list[1] - 1
+        v3_idx = face.vertex_list[2] - 1
+
+        # Get world coordinates for each vertex
+        v1 = vertices.vertex_list[v1_idx]
+        v2 = vertices.vertex_list[v2_idx]
+        v3 = vertices.vertex_list[v3_idx]
+
+        # Calculate and normalize the surface normal
+        normal = matrix.CalcSurfaceNormal(
+            [v1.x_world, v1.y_world, v1.z_world],
+            [v2.x_world, v2.y_world, v2.z_world],
+            [v3.x_world, v3.y_world, v3.z_world]
+        )
+        face.normal = matrix.NormaliseVector(normal)
+    print('... done')
+
 if __name__ == '__main__':
 
     print("Loading vertices from file")
     vertex_list = load_vertices_file()
     print("No vertices in file: " + str(vertex_list.vertex_count()))
-    
+
     print("Loading surfaces from file")
     surface_list = load_surfaces_file()
     print("No surfaces in file: " + str(surface_list.surface_count()))

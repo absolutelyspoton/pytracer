@@ -224,34 +224,16 @@ def start():
             vertex.calc_screen_coordinates(MP)
 
         if drawfaces:
-            
+
             for face in surfaces.surface_list:
-                
+
                 # Get index to each vertex in the surface ( 3 in this case as polgon is a triangle )
                 vertex_index_1 = face.vertex_list[0] - 1
                 vertex_index_2 = face.vertex_list[1] - 1
                 vertex_index_3 = face.vertex_list[2] - 1
 
-                # Calculate surface normals 
-                # Using two collinear vertices, calculate normal between the two vectors
-                # Needed for deciding whether to cull the rendering of the surface
-                normal = matrix.CalcSurfaceNormal(
-                        [vertices.vertex_list[vertex_index_1].x_world,
-                        vertices.vertex_list[vertex_index_1].y_world,
-                        vertices.vertex_list[vertex_index_1].z_world],
-                        [vertices.vertex_list[vertex_index_2].x_world,
-                        vertices.vertex_list[vertex_index_2].y_world,
-                        vertices.vertex_list[vertex_index_2].z_world],
-                        [vertices.vertex_list[vertex_index_3].x_world,
-                        vertices.vertex_list[vertex_index_3].y_world,
-                        vertices.vertex_list[vertex_index_3].z_world])
-                
-                # TODO: iterate around the vertices of the surface until success (page 382)
-                # No need for now as each face is a triangle i.e. only 3 vertices
-                # success = (abs(normal[0]) + abs(normal[1]) + abs(normal[2]) > 0.0001)
-                
-                # Normalise the normal and store in the face object
-                face.normal = matrix.NormaliseVector(normal)
+                # Surface normals are pre-computed at load time and cached in face.normal
+                # (no per-frame recalculation needed)
 
                 # view plane transformation (basic TODO: add wiew point and proper perspective view plane transform )
                 # i.e. convert 3 dimensional coordinate onto 2 dimensional view plane ( impl parralel and perspective )
@@ -316,6 +298,10 @@ if __name__ == '__main__':
 
     print('validating surfaces ...')
     validate_surfaces(surfaces, vertices.vertex_count())
+    print('... done')
+
+    print('computing surface normals ...')
+    loader.compute_surface_normals(surfaces, vertices)
     print('... done')
 
     print('starting render mode ...')
