@@ -15,7 +15,7 @@ GUI Commands
 |a             |Display X/Y/Z Axis Legend                      |
 |n|v           |Toggle display of vertex normals               |
 |f             |Toggle display of surfaces (polygons)          |
-|s             |Cycle render mode: wireframe / hidden-line / solid |
+|s             |Cycle render mode: wireframe / hidden-line / solid / gouraud / phong |
 |b             |Toggle backface culling (wireframe mode)       |
 |h             |Toggle help overlay                            |
 |q             |Quit                                           |
@@ -32,9 +32,9 @@ Feature History
 |0.6           |Loader supports files, MongoDB direct, and API to Mongo                  |
 |0.7           |View plane & perspective camera (dolly, near-plane clipping, viewport)   |
 |0.8           |Backface culling & hidden-surface removal (painter's algorithm)          |
-|0.9 (todo)    |Single light source                                                      |
-|1.0 (todo)    |Phong Shading                                                            |
-|1.1 (todo)    |Gauraud Shading                                                          |
+|0.9           |Single light source (Phong reflection model: ambient/diffuse/specular)  |
+|1.0           |Phong Shading (per-pixel normal interpolation, scanline rasteriser)      |
+|1.1           |Gauraud Shading (per-vertex lighting, colour interpolation)              |
 |1.2 (todo)    |Shadows                                                                  |
 |1.3 (todo)    |Multiple light source                                                    |
 

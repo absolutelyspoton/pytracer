@@ -8,15 +8,38 @@ import time
 import loader
 import matrix
 import sys
-import math
 import surface
 import vertex as v
 import viewer_state
 import viewport
+import light
+import raster
 
 INPUT_DATA_SOURCE = 'file'  # 'db' or 'file'
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 800
+
+# Gouraud/Phong rasterise per pixel in pure Python, so they render into a
+# reduced-resolution buffer scaled up to the pane. 2 = half resolution
+# (4x fewer pixels); set to 1 for full resolution at ~4x the frame time.
+RENDER_SCALE = 2
+
+# Solid mode anti-aliasing: supersample the pane by this factor and smooth-
+# downscale (pygame polygon fills are C-speed, so 2x2 oversampling is cheap).
+# Set to 1 to disable.
+SOLID_SSAA = 2
+
+# Gouraud/Phong still-image anti-aliasing: while the view is changing they
+# render at 1/RENDER_SCALE resolution for interactivity; once the view has
+# been still for STILL_FRAMES_FOR_HQ frames, one supersampled frame is
+# rendered at SSAA_STILL x pane resolution (slow - seconds for Phong) and
+# cached until the view changes again.
+SSAA_STILL = 2
+STILL_FRAMES_FOR_HQ = 15
+
+# Interactive Phong evaluates lighting every Nth pixel (held between) for
+# speed; anti-aliased stills always use per-pixel lighting (step 1).
+PHONG_INTERACTIVE_STEP = 2
 
 # Color constants
 COLOR_BLACK = (0, 0, 0)
@@ -28,25 +51,6 @@ COLOR_MAGENTA = (255, 0, 255)
 
 vertices = v.vertices()
 surfaces = surface.surface()
-
-
-def CalcVectorNormals():
-    """Calculate vertex normals from surface normals."""
-    print('calculating vertex normals from surface normals ...')
-    for vertex in vertices.vertex_list:
-        totalvec_x = 0
-        totalvec_y = 0
-        totalvec_z = 0
-        sc = 0
-        for s in surfaces.surface_list:
-            if vertex.index in s.vertex_list:
-                totalvec_x = totalvec_x + s.normal[0]
-                totalvec_y = totalvec_y + s.normal[1]
-                totalvec_z = totalvec_z + s.normal[2]
-                sc += 1
-        if sc > 0:
-            vertex.normal = matrix.NormaliseVector([totalvec_x/sc, totalvec_y/sc, totalvec_z/sc])
-    print('... done')
 
 
 def validate_surfaces(surfaces, vertex_count):
@@ -87,6 +91,21 @@ def start():
                                 -(min(ys) + max(ys)) / 2.0,
                                 -(min(zs) + max(zs)) / 2.0)
 
+    # Offscreen buffer for the per-pixel shading modes (see RENDER_SCALE)
+    raster_buffer = pygame.Surface((vp.width // RENDER_SCALE,
+                                    vp.height // RENDER_SCALE))
+
+    # Oversized buffer for solid-mode supersampled anti-aliasing (SOLID_SSAA)
+    solid_buffer = pygame.Surface((vp.width * SOLID_SSAA,
+                                   vp.height * SOLID_SSAA))
+
+    # Oversized buffer + cache for Gouraud/Phong anti-aliased stills
+    hq_buffer = pygame.Surface((vp.width * SSAA_STILL,
+                                vp.height * SSAA_STILL))
+    hq_sig = None      # view signature the cached still was rendered for
+    hq_image = None    # cached pane-sized anti-aliased still
+    still_frames = 0   # consecutive frames with an unchanged view
+
     # Rendering resources
     clock = pygame.time.Clock()
     font = pygame.font.Font(None, 36)
@@ -103,7 +122,7 @@ def start():
         'a - Toggle axis legend',
         'n/v - Toggle vertex normals',
         'f - Toggle faces',
-        's - Cycle render mode (wireframe/hidden-line/solid)',
+        's - Cycle render: wire/hidden-line/solid/gouraud/phong',
         'b - Toggle backface culling (wireframe)',
         'h - Toggle this help',
         'q - Quit'
@@ -123,17 +142,7 @@ def start():
                 if event.key == pygame.K_q:
                     sys.exit()
 
-                # Special handling for normals toggle (needs CalcVectorNormals call)
-                if event.key == pygame.K_n or event.key == pygame.K_v:
-                    state.toggle_normals()
-                    status = 'on' if state.draw_normals else 'off'
-                    print(f'vertex normals {status} ...')
-                    if state.draw_normals and not state.normals_calculated:
-                        CalcVectorNormals()
-                        state.normals_calculated = True
-                else:
-                    # All other input to handler
-                    input_handler.handle_keydown(event.key)
+                input_handler.handle_keydown(event.key)
 
         # Compute transformations: model (scale·rotate·translate) composed
         # with the camera's view matrix, so view space has the camera at the
@@ -203,21 +212,50 @@ def start():
 
                     depth = (va.z_view + vb.z_view + vc.z_view) / 3.0
                     cue = int(190 * (depth - z_lo) / z_span)
-                    pygame.draw.polygon(screen, (cue, cue, cue),
+                    pygame.draw.aalines(screen, (cue, cue, cue), True,
                                         ((va.x_screen, va.y_screen),
                                          (vb.x_screen, vb.y_screen),
-                                         (vc.x_screen, vc.y_screen)), 1)
+                                         (vc.x_screen, vc.y_screen)))
 
             else:
-                # Painter's algorithm for hidden-line and solid modes: collect
+                # Painter's algorithm for all filled modes: collect
                 # front-facing faces, then draw far-to-near so nearer faces
                 # paint over further ones.
-                solid = state.render_mode == 'solid'
+                mode = state.render_mode
+
+                # Gouraud/Phong: track whether the view changed; a cached
+                # anti-aliased still short-circuits the whole frame build
+                if mode in ('gouraud', 'phong'):
+                    view_sig = (tuple(state.rotation), tuple(state.translation),
+                                tuple(state.scale), state.camera.distance, mode)
+                    if view_sig != hq_sig:
+                        hq_sig = view_sig
+                        hq_image = None
+                        still_frames = 0
+                    else:
+                        still_frames += 1
+                use_cached_still = (mode in ('gouraud', 'phong')
+                                    and hq_image is not None)
+
+                # Smooth shading needs per-vertex view-space normals; Gouraud
+                # additionally lights every vertex once, up front
+                if mode in ('gouraud', 'phong') and not use_cached_still:
+                    view_normals = [matrix.MatrixVector(MR, vtx.normal)
+                                    for vtx in vlist]
+                if mode == 'gouraud' and not use_cached_still:
+                    vertex_colors = [light.phong_shade(
+                                         view_normals[i],
+                                         (vtx.x_view, vtx.y_view, vtx.z_view),
+                                         state.light)
+                                     for i, vtx in enumerate(vlist)]
+
                 render_list = []
-                for face_idx, face in enumerate(surfaces.surface_list):
-                    va = vlist[face.vertex_list[0] - 1]
-                    vb = vlist[face.vertex_list[1] - 1]
-                    vc = vlist[face.vertex_list[2] - 1]
+                for face_idx, face in ([] if use_cached_still
+                                       else enumerate(surfaces.surface_list)):
+                    i1 = face.vertex_list[0] - 1
+                    i2 = face.vertex_list[1] - 1
+                    i3 = face.vertex_list[2] - 1
+                    va, vb, vc = vlist[i1], vlist[i2], vlist[i3]
                     if va.clipped or vb.clipped or vc.clipped:
                         continue
 
@@ -229,29 +267,95 @@ def start():
                     if facing <= 0:
                         continue
 
-                    if solid:
-                        # Facing ratio 0..1: a "headlight" at the camera, until
-                        # a real light source lands (roadmap rev 0.9)
-                        facing /= math.sqrt(cx * cx + cy * cy + cz * cz)
-                        shade = int(40 + 180 * min(facing, 1.0))
-                    else:
+                    pts = ((va.x_screen, va.y_screen),
+                           (vb.x_screen, vb.y_screen),
+                           (vc.x_screen, vc.y_screen))
+                    if mode == 'hidden-line':
                         shade = int(190 * (cz - z_lo) / z_span)  # edge depth cue
-                    render_list.append((cz, shade,
-                                        (va.x_screen, va.y_screen),
-                                        (vb.x_screen, vb.y_screen),
-                                        (vc.x_screen, vc.y_screen)))
+                        payload = (shade, shade, shade)
+                    elif mode == 'solid':
+                        # Flat shading: one lighting evaluation per face
+                        payload = light.phong_shade(n, (cx, cy, cz), state.light)
+                    elif mode == 'gouraud':
+                        payload = (vertex_colors[i1], vertex_colors[i2],
+                                   vertex_colors[i3])
+                    else:  # phong
+                        payload = ((view_normals[i1], view_normals[i2],
+                                    view_normals[i3]),
+                                   ((va.x_view, va.y_view, va.z_view),
+                                    (vb.x_view, vb.y_view, vb.z_view),
+                                    (vc.x_view, vc.y_view, vc.z_view)))
+                    render_list.append((cz, payload, pts))
 
                 render_list.sort(key=lambda t: -t[0])  # far first
-                if solid:
-                    for depth, shade, p1, p2, p3 in render_list:
-                        pygame.draw.polygon(screen, (shade, shade, shade), (p1, p2, p3), 0)
-                else:
-                    # Hidden-line: fill with background to erase edges behind,
-                    # then outline with the depth-cued colour
-                    for depth, shade, p1, p2, p3 in render_list:
-                        pts = (p1, p2, p3)
+
+                if mode == 'hidden-line':
+                    # Fill with background to erase edges behind, then outline
+                    # with the depth-cued colour (antialiased)
+                    for depth, colr, pts in render_list:
                         pygame.draw.polygon(screen, COLOR_WHITE, pts, 0)
-                        pygame.draw.polygon(screen, (shade, shade, shade), pts, 1)
+                        pygame.draw.aalines(screen, colr, True, pts)
+                elif mode == 'solid':
+                    if SOLID_SSAA > 1:
+                        # Supersample: fill at SSAA x pane resolution, then
+                        # smooth-downscale into the pane for anti-aliasing
+                        buf = solid_buffer
+                        buf.fill(COLOR_WHITE)
+                        ss = SOLID_SSAA
+                        for depth, colr, pts in render_list:
+                            bpts = tuple(((p[0] - vp.x) * ss, (p[1] - vp.y) * ss)
+                                         for p in pts)
+                            pygame.draw.polygon(buf, colr, bpts, 0)
+                        screen.blit(pygame.transform.smoothscale(
+                            buf, (vp.width, vp.height)), (vp.x, vp.y))
+                    else:
+                        for depth, colr, pts in render_list:
+                            pygame.draw.polygon(screen, colr, pts, 0)
+                else:
+                    # Gouraud/Phong rasterise per pixel in pure Python. While
+                    # the view is changing they use the reduced-resolution
+                    # buffer for interactivity; once still, one supersampled
+                    # anti-aliased frame is rendered and cached (see the
+                    # SSAA_STILL / STILL_FRAMES_FOR_HQ constants).
+                    if use_cached_still:
+                        screen.blit(hq_image, (vp.x, vp.y))
+                    else:
+                        if still_frames >= STILL_FRAMES_FOR_HQ:
+                            buf = hq_buffer
+                            pt_scale = float(SSAA_STILL)
+                            print(f'rendering anti-aliased {mode} still ...')
+                        else:
+                            buf = raster_buffer
+                            pt_scale = 1.0 / RENDER_SCALE
+
+                        # The rasteriser writes pixels directly (set_at
+                        # ignores the clip rect), so it gets bounds explicitly
+                        buf.fill(COLOR_WHITE)
+                        bounds = (0, 0, buf.get_width() - 1, buf.get_height() - 1)
+
+                        if mode == 'gouraud':
+                            for depth, colors, pts in render_list:
+                                bpts = tuple(((p[0] - vp.x) * pt_scale,
+                                              (p[1] - vp.y) * pt_scale)
+                                             for p in pts)
+                                raster.fill_gouraud(buf, bpts, colors, bounds)
+                        else:  # phong
+                            phong_step = (1 if buf is hq_buffer
+                                          else PHONG_INTERACTIVE_STEP)
+                            for depth, (normals, view_pts), pts in render_list:
+                                bpts = tuple(((p[0] - vp.x) * pt_scale,
+                                              (p[1] - vp.y) * pt_scale)
+                                             for p in pts)
+                                raster.fill_phong(buf, bpts, normals, view_pts,
+                                                  state.light, bounds,
+                                                  step=phong_step)
+
+                        scaled = pygame.transform.smoothscale(
+                            buf, (vp.width, vp.height))
+                        if buf is hq_buffer:
+                            hq_image = scaled
+                            print('... done')
+                        screen.blit(scaled, (vp.x, vp.y))
 
         # Draw vertex normals (clip rect trims any that cross the pane edge)
         if state.draw_normals:
@@ -371,6 +475,7 @@ if __name__ == '__main__':
 
     print('computing surface normals ...')
     loader.compute_surface_normals(surfaces, vertices)
+    loader.compute_vertex_normals(surfaces, vertices)
     print('... done')
 
     print('starting render mode ...')

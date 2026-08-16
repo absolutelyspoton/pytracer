@@ -95,6 +95,27 @@ def compute_surface_normals(surfaces, vertices):
         face.normal = matrix.NormaliseVector(normal)
     print('... done')
 
+def compute_vertex_normals(surfaces, vertices):
+    """Calculate vertex normals by averaging the normals of adjacent faces.
+
+    Like surface normals these are mesh-invariant, computed once at load.
+    Single O(faces) accumulation pass: each face's normal is added to its
+    three vertices, then each vertex sum is normalised. Requires
+    compute_surface_normals() to have run first.
+    """
+    print('computing vertex normals from surface normals ...')
+    sums = [[0.0, 0.0, 0.0] for _ in vertices.vertex_list]
+    for face in surfaces.surface_list:
+        n = face.normal
+        for vi in face.vertex_list:
+            s = sums[vi - 1]
+            s[0] += n[0]
+            s[1] += n[1]
+            s[2] += n[2]
+    for vtx, s in zip(vertices.vertex_list, sums):
+        vtx.normal = matrix.NormaliseVector(s)
+    print('... done')
+
 if __name__ == '__main__':
 
     print("Loading vertices from file")

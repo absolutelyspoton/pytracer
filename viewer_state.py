@@ -7,6 +7,7 @@
 import pygame
 import math
 import camera
+import light
 
 class ViewerState:
     """Encapsulates all viewer transformation and display state."""
@@ -16,7 +17,7 @@ class ViewerState:
     ROTATION_INCREMENT_DEG = 25
     TRANSLATION_INCREMENT = 0.25  # world units (model is ~3.5 units in radius)
     DOLLY_MULTIPLIER = 1.1
-    RENDER_MODES = ['wireframe', 'hidden-line', 'solid']
+    RENDER_MODES = ['wireframe', 'hidden-line', 'solid', 'gouraud', 'phong']
 
     def __init__(self, screen_width, screen_height):
         # Model transformations (world units; the model loads at its raw size)
@@ -27,9 +28,11 @@ class ViewerState:
         # Camera (view transform + perspective projection)
         self.camera = camera.Camera()
 
+        # Single directional light (view space, fixed relative to the viewer)
+        self.light = light.Light()
+
         # Display flags
         self.draw_normals = False
-        self.normals_calculated = False
         self.draw_faces = True
         self.draw_axes = True
         self.backface_cull = False  # wireframe-only toggle; other modes always cull
