@@ -17,9 +17,16 @@ INPUT_DATA_SOURCE = 'file'  # 'db' or 'file'
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 800
 
+# Color constants
+COLOR_BLACK = (0, 0, 0)
+COLOR_WHITE = (255, 255, 255)
+COLOR_RED = (255, 100, 100)
+COLOR_BLUE = (0, 0, 255)
+COLOR_GREEN = (0, 255, 0)
+COLOR_MAGENTA = (255, 0, 255)
+
 vertices = v.vertices()
 surfaces = surface.surface()
-svmap = []
 
 
 def CalcVectorNormals():
@@ -54,19 +61,12 @@ def validate_surfaces(surfaces, vertex_count):
 
 def start():
     """Main render loop using encapsulated ViewerState."""
-    # Colors
-    black = (0, 0, 0)
-    white = (255, 255, 255)
-    red = (255, 100, 100)
-    blue = (0, 0, 255)
-    green = (0, 255, 0)
-    magenta = (255, 0, 255)
 
     # Initialize pygame
     pygame.init()
     size = SCREEN_WIDTH, SCREEN_HEIGHT
     screen = pygame.display.set_mode(size)
-    screen.fill(white)
+    screen.fill(COLOR_WHITE)
 
     # Initialize state and input handler
     state = viewer_state.ViewerState(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -77,7 +77,7 @@ def start():
     font = pygame.font.Font(None, 36)
     help_font = pygame.font.Font(None, 28)
     fps_update_timer = 0
-    fps_text = font.render('FPS: 0.0', True, black)
+    fps_text = font.render('FPS: 0.0', True, COLOR_BLACK)
 
     help_text = [
         'KEYBOARD CONTROLS:',
@@ -96,7 +96,7 @@ def start():
     while True:
         # Update continuous rotations
         state.update_continuous_rotations()
-        screen.fill(white)
+        screen.fill(COLOR_WHITE)
 
         # Handle input events
         for event in pygame.event.get():
@@ -151,7 +151,7 @@ def start():
                     (vertices.vertex_list[v2_idx].x_screen, vertices.vertex_list[v2_idx].y_screen),
                     (vertices.vertex_list[v3_idx].x_screen, vertices.vertex_list[v3_idx].y_screen)
                 ]
-                pygame.draw.polygon(screen, black, p, 1)
+                pygame.draw.polygon(screen, COLOR_BLACK, p, 1)
 
         # Draw vertex normals
         if state.draw_normals:
@@ -159,20 +159,20 @@ def start():
                 x1, y1 = vertex.x_screen, vertex.y_screen
                 x2 = x1 - vertex.normal[0] * 10
                 y2 = y1 - vertex.normal[1] * 10
-                pygame.draw.line(screen, red, [x1, y1], [x2, y2], 1)
+                pygame.draw.line(screen, COLOR_RED, [x1, y1], [x2, y2], 1)
 
         # Draw axis legend
         if state.draw_axes:
             tx, ty = state.translation[0], state.translation[1]
-            pygame.draw.line(screen, green, [tx, ty], [tx + 200, ty], 3)
-            pygame.draw.line(screen, blue, [tx, ty], [tx, ty + 200], 3)
-            pygame.draw.line(screen, magenta, [tx, ty], [tx + 175, ty + 175], 3)
+            pygame.draw.line(screen, COLOR_GREEN, [tx, ty], [tx + 200, ty], 3)
+            pygame.draw.line(screen, COLOR_BLUE, [tx, ty], [tx, ty + 200], 3)
+            pygame.draw.line(screen, COLOR_MAGENTA, [tx, ty], [tx + 175, ty + 175], 3)
 
         # Draw FPS counter
         fps_update_timer += 1
         if fps_update_timer >= 10:
             current_fps = clock.get_fps()
-            fps_text = font.render(f'FPS: {current_fps:.1f}', True, black)
+            fps_text = font.render(f'FPS: {current_fps:.1f}', True, COLOR_BLACK)
             fps_update_timer = 0
 
         screen.blit(fps_text, (10, 10))
@@ -181,7 +181,7 @@ def start():
         if state.show_help:
             help_y = 60
             for line in help_text:
-                help_surface = help_font.render(line, True, black)
+                help_surface = help_font.render(line, True, COLOR_BLACK)
                 screen.blit(help_surface, (10, help_y))
                 help_y += 30
 
